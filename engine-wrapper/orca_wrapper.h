@@ -24,6 +24,7 @@ int orca_slice(OrcaEngine* engine);
 const char* orca_get_gcode(OrcaEngine* engine);
 const char* orca_get_gcode_summary(OrcaEngine* engine);
 const char* orca_get_enriched_gcode_summary(OrcaEngine* engine);
+const char* orca_get_slice_metrics(OrcaEngine* engine);
 int orca_write_gcode_to_file(OrcaEngine* engine, const char* path);
 const char* orca_get_last_error(OrcaEngine* engine);
 

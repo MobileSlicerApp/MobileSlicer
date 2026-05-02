@@ -120,13 +120,13 @@ def build_markdown(records: list[dict[str, Any]], failures: list[str]) -> str:
                 "",
                 "## Slice Phases",
                 "",
-                "| Name | Fixture bytes | Stage ms | Native load ms | Placement ms | Config ms | Native slice ms | Write G-code ms | Total ms |",
-                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                "| Name | Fixture bytes | Stage ms | Native load ms | Placement ms | Config ms | Native slice ms | Write G-code ms | Preview moves | Preview vertices | Preview cache ms | Total ms |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for record in slice_records:
             lines.append(
-                "| {name} | {fixture_bytes} | {stage} | {native_load} | {placement} | {config} | {native_slice} | {write_gcode} | {elapsed} |".format(
+                "| {name} | {fixture_bytes} | {stage} | {native_load} | {placement} | {config} | {native_slice} | {write_gcode} | {preview_moves} | {preview_vertices} | {preview_cache_ms} | {elapsed} |".format(
                     name=record.get("name", ""),
                     fixture_bytes=record.get("fixture_bytes", ""),
                     stage=record.get("staging_ms", ""),
@@ -135,6 +135,9 @@ def build_markdown(records: list[dict[str, Any]], failures: list[str]) -> str:
                     config=record.get("config_ms", ""),
                     native_slice=record.get("native_slice_ms", ""),
                     write_gcode=record.get("write_gcode_ms", ""),
+                    preview_moves=record.get("preview_moves", ""),
+                    preview_vertices=record.get("preview_cached_vertices", ""),
+                    preview_cache_ms=record.get("preview_cache_build_ms", ""),
                     elapsed=record.get("elapsed_ms", ""),
                 )
             )
@@ -233,6 +236,9 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
             ("native_load_ms", slice_regression_percent),
             ("native_slice_ms", slice_regression_percent),
             ("write_gcode_ms", slice_regression_percent),
+            ("preview_cache_build_ms", slice_regression_percent),
+            ("preview_moves", output_regression_percent),
+            ("preview_cached_vertices", output_regression_percent),
             ("peak_pss_kb", memory_regression_percent),
             ("peak_java_heap_kb", memory_regression_percent),
             ("peak_native_heap_kb", memory_regression_percent),
@@ -317,6 +323,11 @@ def main() -> int:
                 f"stagingMs={record.get('staging_ms')} nativeLoadMs={record.get('native_load_ms')} "
                 f"placementMs={record.get('placement_ms')} configMs={record.get('config_ms')} "
                 f"nativeSliceMs={record.get('native_slice_ms')} writeGcodeMs={record.get('write_gcode_ms')} "
+                f"previewMoves={record.get('preview_moves')} "
+                f"previewCacheBuilt={record.get('preview_cache_built')} "
+                f"previewCacheComplete={record.get('preview_cache_complete')} "
+                f"previewCachedVertices={record.get('preview_cached_vertices')} "
+                f"previewCacheBuildMs={record.get('preview_cache_build_ms')} "
                 f"peakPssKb={record.get('peak_pss_kb')} javaHeapKb={record.get('peak_java_heap_kb')} "
                 f"nativeHeapKb={record.get('peak_native_heap_kb')} graphicsKb={record.get('peak_graphics_kb')} "
                 f"privateOtherKb={record.get('peak_private_other_kb')} "

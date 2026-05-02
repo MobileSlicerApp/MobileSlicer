@@ -508,6 +508,16 @@ Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeGetEnrichedGcodeSumm
 }
 
 extern "C" JNIEXPORT jstring JNICALL
+Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeGetSliceMetrics(JNIEnv* env, jclass, jlong handle)
+{
+    if (handle == 0) {
+        return nullptr;
+    }
+
+    return new_nonempty_string(env, orca_get_slice_metrics(engine_from_handle(handle)));
+}
+
+extern "C" JNIEXPORT jstring JNICALL
 Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativePlanLatestSlicePreviewRanges(JNIEnv* env, jclass, jlong handle, jlong min_layer, jlong max_layer, jlong vertex_budget)
 {
     if (handle == 0) {

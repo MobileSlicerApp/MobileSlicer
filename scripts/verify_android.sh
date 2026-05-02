@@ -30,6 +30,11 @@ AUTOMATION_LAST_PLACEMENT_MS=""
 AUTOMATION_LAST_CONFIG_MS=""
 AUTOMATION_LAST_NATIVE_SLICE_MS=""
 AUTOMATION_LAST_WRITE_GCODE_MS=""
+AUTOMATION_LAST_PREVIEW_MOVES=""
+AUTOMATION_LAST_PREVIEW_CACHE_BUILT=""
+AUTOMATION_LAST_PREVIEW_CACHE_COMPLETE=""
+AUTOMATION_LAST_PREVIEW_CACHED_VERTICES=""
+AUTOMATION_LAST_PREVIEW_CACHE_BUILD_MS=""
 AUTOMATION_LAST_PEAK_PSS_KB=""
 AUTOMATION_LAST_PEAK_JAVA_HEAP_KB=""
 AUTOMATION_LAST_PEAK_NATIVE_HEAP_KB=""
@@ -687,6 +692,11 @@ run_automation_slice() {
   AUTOMATION_LAST_CONFIG_MS="$(status_metric "$status" "configMs")"
   AUTOMATION_LAST_NATIVE_SLICE_MS="$(status_metric "$status" "nativeSliceMs")"
   AUTOMATION_LAST_WRITE_GCODE_MS="$(status_metric "$status" "writeGcodeMs")"
+  AUTOMATION_LAST_PREVIEW_MOVES="$(status_metric "$status" "previewMoves")"
+  AUTOMATION_LAST_PREVIEW_CACHE_BUILT="$(status_metric "$status" "previewCacheBuilt")"
+  AUTOMATION_LAST_PREVIEW_CACHE_COMPLETE="$(status_metric "$status" "previewCacheComplete")"
+  AUTOMATION_LAST_PREVIEW_CACHED_VERTICES="$(status_metric "$status" "previewCachedVertices")"
+  AUTOMATION_LAST_PREVIEW_CACHE_BUILD_MS="$(status_metric "$status" "previewCacheBuildMs")"
   AUTOMATION_LAST_PEAK_PSS_KB="$PERF_LAST_PEAK_PSS_KB"
   AUTOMATION_LAST_PEAK_JAVA_HEAP_KB="$PERF_LAST_PEAK_JAVA_HEAP_KB"
   AUTOMATION_LAST_PEAK_NATIVE_HEAP_KB="$PERF_LAST_PEAK_NATIVE_HEAP_KB"
@@ -729,16 +739,21 @@ append_perf_record() {
   local native_slice_ms="$9"
   local write_gcode_ms="${10}"
   local elapsed_ms="${11}"
-  local peak_pss_kb="${12}"
-  local peak_java_heap_kb="${13}"
-  local peak_native_heap_kb="${14}"
-  local peak_graphics_kb="${15}"
-  local peak_private_other_kb="${16}"
-  local peak_system_kb="${17}"
-  local bytes="${18}"
-  local fixture_bytes="${19}"
-  local device_output_path="${20}"
-  python3 - "$records_path" "$name" "$type" "$startup_ms" "$staging_ms" "$native_load_ms" "$placement_ms" "$config_ms" "$native_slice_ms" "$write_gcode_ms" "$elapsed_ms" "$peak_pss_kb" "$peak_java_heap_kb" "$peak_native_heap_kb" "$peak_graphics_kb" "$peak_private_other_kb" "$peak_system_kb" "$bytes" "$fixture_bytes" "$device_output_path" <<'PY'
+  local preview_moves="${12}"
+  local preview_cache_built="${13}"
+  local preview_cache_complete="${14}"
+  local preview_cached_vertices="${15}"
+  local preview_cache_build_ms="${16}"
+  local peak_pss_kb="${17}"
+  local peak_java_heap_kb="${18}"
+  local peak_native_heap_kb="${19}"
+  local peak_graphics_kb="${20}"
+  local peak_private_other_kb="${21}"
+  local peak_system_kb="${22}"
+  local bytes="${23}"
+  local fixture_bytes="${24}"
+  local device_output_path="${25}"
+  python3 - "$records_path" "$name" "$type" "$startup_ms" "$staging_ms" "$native_load_ms" "$placement_ms" "$config_ms" "$native_slice_ms" "$write_gcode_ms" "$elapsed_ms" "$preview_moves" "$preview_cache_built" "$preview_cache_complete" "$preview_cached_vertices" "$preview_cache_build_ms" "$peak_pss_kb" "$peak_java_heap_kb" "$peak_native_heap_kb" "$peak_graphics_kb" "$peak_private_other_kb" "$peak_system_kb" "$bytes" "$fixture_bytes" "$device_output_path" <<'PY'
 import json
 import sys
 
@@ -754,6 +769,11 @@ import sys
     native_slice_ms,
     write_gcode_ms,
     elapsed_ms,
+    preview_moves,
+    preview_cache_built,
+    preview_cache_complete,
+    preview_cached_vertices,
+    preview_cache_build_ms,
     peak_pss_kb,
     peak_java_heap_kb,
     peak_native_heap_kb,
@@ -781,6 +801,11 @@ for key, value in [
     ("native_slice_ms", native_slice_ms),
     ("write_gcode_ms", write_gcode_ms),
     ("elapsed_ms", elapsed_ms),
+    ("preview_moves", preview_moves),
+    ("preview_cache_built", preview_cache_built),
+    ("preview_cache_complete", preview_cache_complete),
+    ("preview_cached_vertices", preview_cached_vertices),
+    ("preview_cache_build_ms", preview_cache_build_ms),
     ("peak_pss_kb", peak_pss_kb),
     ("peak_java_heap_kb", peak_java_heap_kb),
     ("peak_native_heap_kb", peak_native_heap_kb),
@@ -823,6 +848,11 @@ run_perf_slice_case() {
     "$AUTOMATION_LAST_NATIVE_SLICE_MS" \
     "$AUTOMATION_LAST_WRITE_GCODE_MS" \
     "$AUTOMATION_LAST_ELAPSED_MS" \
+    "$AUTOMATION_LAST_PREVIEW_MOVES" \
+    "$AUTOMATION_LAST_PREVIEW_CACHE_BUILT" \
+    "$AUTOMATION_LAST_PREVIEW_CACHE_COMPLETE" \
+    "$AUTOMATION_LAST_PREVIEW_CACHED_VERTICES" \
+    "$AUTOMATION_LAST_PREVIEW_CACHE_BUILD_MS" \
     "$AUTOMATION_LAST_PEAK_PSS_KB" \
     "$AUTOMATION_LAST_PEAK_JAVA_HEAP_KB" \
     "$AUTOMATION_LAST_PEAK_NATIVE_HEAP_KB" \
@@ -887,7 +917,7 @@ run_performance_gate() {
     startup_private_other_kb="$(meminfo_app_summary_kb "$startup_meminfo" "Private Other")"
     startup_system_kb="$(meminfo_app_summary_kb "$startup_meminfo" "System")"
     printf '%s\n' "$startup_meminfo" > "$PERF_CURRENT_MEMINFO_DIR/cold-start-final-meminfo.txt"
-    append_perf_record "$records_path" "cold-start" "startup" "$startup_ms" "" "" "" "" "" "" "" "${startup_pss_kb:-0}" "${startup_java_heap_kb:-0}" "${startup_native_heap_kb:-0}" "${startup_graphics_kb:-0}" "${startup_private_other_kb:-0}" "${startup_system_kb:-0}" "" "" ""
+    append_perf_record "$records_path" "cold-start" "startup" "$startup_ms" "" "" "" "" "" "" "" "" "" "" "" "" "${startup_pss_kb:-0}" "${startup_java_heap_kb:-0}" "${startup_native_heap_kb:-0}" "${startup_graphics_kb:-0}" "${startup_private_other_kb:-0}" "${startup_system_kb:-0}" "" "" ""
     assert_no_crash_after_launch "$serial"
   fi
 

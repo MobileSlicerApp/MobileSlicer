@@ -124,6 +124,9 @@ internal object NativeEngineCalls {
     fun getEnrichedGcodeSummary(handle: NativeEngineHandle): String? =
         NativeEngineBridge.nativeGetEnrichedGcodeSummary(handle.raw)
 
+    fun getSliceMetrics(handle: NativeEngineHandle): String? =
+        NativeEngineBridge.nativeGetSliceMetrics(handle.raw)
+
     fun planLatestSlicePreviewRanges(
         handle: NativeEngineHandle,
         minLayer: Long,

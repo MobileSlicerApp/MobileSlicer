@@ -77,11 +77,20 @@ internal data class AutomationSliceTiming(
     val totalMs: Long
 )
 
+internal data class AutomationSliceNativeMetrics(
+    val previewMoves: Long = 0L,
+    val previewCacheBuilt: Boolean = false,
+    val previewCacheComplete: Boolean = false,
+    val previewCachedVertices: Long = 0L,
+    val previewCacheBuildMs: Long = 0L
+)
+
 internal fun automationSliceSuccessStatus(
     modelFile: File,
     stagedModel: File,
     outputFile: File,
     timing: AutomationSliceTiming,
+    nativeMetrics: AutomationSliceNativeMetrics = AutomationSliceNativeMetrics(),
     configJson: String
 ): String =
     "success: model=${modelFile.absolutePath} " +
@@ -94,8 +103,33 @@ internal fun automationSliceSuccessStatus(
         "configMs=${timing.configMs} " +
         "nativeSliceMs=${timing.nativeSliceMs} " +
         "writeGcodeMs=${timing.writeGcodeMs} " +
+        "previewMoves=${nativeMetrics.previewMoves} " +
+        "previewCacheBuilt=${if (nativeMetrics.previewCacheBuilt) 1 else 0} " +
+        "previewCacheComplete=${if (nativeMetrics.previewCacheComplete) 1 else 0} " +
+        "previewCachedVertices=${nativeMetrics.previewCachedVertices} " +
+        "previewCacheBuildMs=${nativeMetrics.previewCacheBuildMs} " +
         "elapsedMs=${timing.totalMs} " +
         "config=$configJson"
+
+internal fun parseAutomationSliceNativeMetrics(metricsText: String?): AutomationSliceNativeMetrics {
+    if (metricsText.isNullOrBlank()) {
+        return AutomationSliceNativeMetrics()
+    }
+    val fields = metricsText
+        .split('|')
+        .mapNotNull { field ->
+            val separator = field.indexOf('=')
+            if (separator <= 0) null else field.substring(0, separator) to field.substring(separator + 1)
+        }
+        .toMap()
+    return AutomationSliceNativeMetrics(
+        previewMoves = fields["previewMoves"]?.toLongOrNull() ?: 0L,
+        previewCacheBuilt = fields["previewCacheBuilt"] == "1",
+        previewCacheComplete = fields["previewCacheComplete"] == "1",
+        previewCachedVertices = fields["previewCachedVertices"]?.toLongOrNull() ?: 0L,
+        previewCacheBuildMs = fields["previewCacheBuildMs"]?.toLongOrNull() ?: 0L
+    )
+}
 
 internal class AutomationSliceRunner(
     private val ensureEngine: () -> Long,
@@ -205,6 +239,7 @@ internal class AutomationSliceRunner(
             writeStatus("failed: nativeWriteGcodeToFile produced empty output elapsedMs=${SystemClock.elapsedRealtime() - startedAt}")
             return false
         }
+        val nativeMetrics = parseAutomationSliceNativeMetrics(NativeEngineCalls.getSliceMetrics(engineHandle))
         writeStatus(
             automationSliceSuccessStatus(
                 modelFile = modelFile,
@@ -219,6 +254,7 @@ internal class AutomationSliceRunner(
                     writeGcodeMs = writeGcodeMs,
                     totalMs = SystemClock.elapsedRealtime() - startedAt
                 ),
+                nativeMetrics = nativeMetrics,
                 configJson = configJson
             )
         )

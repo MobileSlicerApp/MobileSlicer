@@ -75,6 +75,7 @@ struct OrcaEngineImpl {
     bool gcode_path_owned{false};
     std::string gcode_summary;
     bool gcode_summary_enriched{false};
+    std::string slice_metrics;
     std::string last_error;
     std::string preview_range_plan;
 #if defined(MOBILE_SLICER_ENABLE_VGCODE)
@@ -2883,6 +2884,7 @@ static void clear_generated_gcode(OrcaEngine* engine)
     engine->impl.gcode.clear();
     engine->impl.gcode_summary.clear();
     engine->impl.gcode_summary_enriched = false;
+    engine->impl.slice_metrics.clear();
 #if defined(MOBILE_SLICER_ENABLE_VGCODE)
     engine->impl.cached_preview_input = libvgcode::GCodeInputData{};
     engine->impl.cached_preview_source_size = 0;
@@ -4020,6 +4022,9 @@ extern "C" int orca_slice(OrcaEngine* engine)
         engine->impl.cached_preview_source_size = 0;
         engine->impl.cached_preview_valid = false;
         engine->impl.cached_preview_complete = false;
+        const size_t preview_moves = gcode_result.moves.size();
+        size_t processor_preview_vertices = 0;
+        long processor_preview_build_ms = 0;
         if (gcode_result.moves.size() >= 2 &&
             gcode_result.moves.size() * static_cast<size_t>(2) <= static_cast<size_t>(kMaxCachedPreviewVertices)) {
             const auto processor_preview_start = std::chrono::steady_clock::now();
@@ -4032,13 +4037,15 @@ extern "C" int orca_slice(OrcaEngine* engine)
             engine->impl.cached_preview_source_size = static_cast<size_t>(gcode_size);
             engine->impl.cached_preview_valid = !engine->impl.cached_preview_input.vertices.empty();
             engine->impl.cached_preview_complete = engine->impl.cached_preview_valid && !processor_preview_limit_reached;
+            processor_preview_vertices = engine->impl.cached_preview_input.vertices.size();
+            processor_preview_build_ms = elapsed_ms_since(processor_preview_start);
             if (kVerboseNativeTimingLogs) {
                 log_native_info(
                     "gcode_processor_preview_cache",
                     "moves=" + std::to_string(gcode_result.moves.size()) +
                         " vertices=" + std::to_string(engine->impl.cached_preview_input.vertices.size()) +
                         " complete=" + std::string(engine->impl.cached_preview_complete ? "true" : "false") +
-                        " buildMs=" + std::to_string(elapsed_ms_since(processor_preview_start)));
+                        " buildMs=" + std::to_string(processor_preview_build_ms));
             }
         } else if (kVerboseNativeTimingLogs) {
             log_native_info(
@@ -4046,6 +4053,15 @@ extern "C" int orca_slice(OrcaEngine* engine)
                 "skipped moves=" + std::to_string(gcode_result.moves.size()) +
                     " reason=too_large_for_exact_cache");
         }
+        engine->impl.slice_metrics =
+            "previewMoves=" + std::to_string(preview_moves) +
+            "|previewCacheBuilt=" + std::string(engine->impl.cached_preview_valid ? "1" : "0") +
+            "|previewCacheComplete=" + std::string(engine->impl.cached_preview_complete ? "1" : "0") +
+            "|previewCachedVertices=" + std::to_string(processor_preview_vertices) +
+            "|previewCacheBuildMs=" + std::to_string(processor_preview_build_ms);
+#else
+        engine->impl.slice_metrics =
+            "previewMoves=0|previewCacheBuilt=0|previewCacheComplete=0|previewCachedVertices=0|previewCacheBuildMs=0";
 #endif
         const long summary_parse_ms = elapsed_ms_since(summary_parse_start);
         const float normal_print_time = gcode_result.print_statistics
@@ -4181,6 +4197,20 @@ extern "C" const char* orca_get_enriched_gcode_summary(OrcaEngine* engine)
     thread_local std::string summary_snapshot;
     summary_snapshot = engine->impl.gcode_summary;
     return summary_snapshot.c_str();
+}
+
+extern "C" const char* orca_get_slice_metrics(OrcaEngine* engine)
+{
+    if (engine == nullptr) {
+        return nullptr;
+    }
+    std::lock_guard<std::recursive_mutex> lock(engine->impl.mutex);
+    if (engine->impl.slice_metrics.empty()) {
+        return nullptr;
+    }
+    thread_local std::string metrics_snapshot;
+    metrics_snapshot = engine->impl.slice_metrics;
+    return metrics_snapshot.c_str();
 }
 
 extern "C" int orca_write_gcode_to_file(OrcaEngine* engine, const char* path)
