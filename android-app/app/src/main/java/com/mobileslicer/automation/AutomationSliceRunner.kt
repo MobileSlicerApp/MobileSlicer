@@ -94,6 +94,7 @@ internal data class AutomationSliceNativeMetrics(
     val processorLineEndBytes: Long = 0L,
     val previewLayerCountBytes: Long = 0L,
     val exactPreviewCacheEligible: Boolean = false,
+    val processorMovesReleasedDuringExport: Boolean = false,
     val processorMoveBytesRetained: Long = 0L,
     val processorLineEndBytesRetained: Long = 0L,
     val processorReleaseMs: Long = 0L
@@ -149,6 +150,7 @@ internal fun automationSliceSuccessStatus(
         "processorLineEndBytes=${nativeMetrics.processorLineEndBytes} " +
         "previewLayerCountBytes=${nativeMetrics.previewLayerCountBytes} " +
         "exactPreviewCacheEligible=${if (nativeMetrics.exactPreviewCacheEligible) 1 else 0} " +
+        "processorMovesReleasedDuringExport=${if (nativeMetrics.processorMovesReleasedDuringExport) 1 else 0} " +
         "processorMoveBytesRetained=${nativeMetrics.processorMoveBytesRetained} " +
         "processorLineEndBytesRetained=${nativeMetrics.processorLineEndBytesRetained} " +
         "processorReleaseMs=${nativeMetrics.processorReleaseMs} " +
@@ -191,6 +193,7 @@ internal fun parseAutomationSliceNativeMetrics(metricsText: String?): Automation
         processorLineEndBytes = fields["processorLineEndBytes"]?.toLongOrNull() ?: 0L,
         previewLayerCountBytes = fields["previewLayerCountBytes"]?.toLongOrNull() ?: 0L,
         exactPreviewCacheEligible = fields["exactPreviewCacheEligible"] == "1",
+        processorMovesReleasedDuringExport = fields["processorMovesReleasedDuringExport"] == "1",
         processorMoveBytesRetained = fields["processorMoveBytesRetained"]?.toLongOrNull() ?: 0L,
         processorLineEndBytesRetained = fields["processorLineEndBytesRetained"]?.toLongOrNull() ?: 0L,
         processorReleaseMs = fields["processorReleaseMs"]?.toLongOrNull() ?: 0L

@@ -249,6 +249,13 @@ class Print;
         std::unordered_map<std::vector<unsigned int>, std::vector<std::pair<int, int>>,FilamentSequenceHash> layer_filaments;
         // first key stores `from` filament, second keys stores the `to` filament
         std::map<std::pair<int,int>, int > filament_change_count_map;
+        bool move_time_summary_valid{false};
+        std::map<ExtrusionRole, double> move_role_times;
+        std::map<EMoveType, double> move_type_times;
+        size_t released_move_count{0};
+        size_t released_move_bytes{0};
+        size_t released_line_end_count{0};
+        size_t released_line_end_bytes{0};
 
         BedType bed_type = BedType::btCount;
         void reset();
@@ -286,6 +293,13 @@ class Print;
             layer_filaments = other.layer_filaments;
             filament_change_count_map = other.filament_change_count_map;
             initial_layer_time = other.initial_layer_time;
+            move_time_summary_valid = other.move_time_summary_valid;
+            move_role_times = other.move_role_times;
+            move_type_times = other.move_type_times;
+            released_move_count = other.released_move_count;
+            released_move_bytes = other.released_move_bytes;
+            released_line_end_count = other.released_line_end_count;
+            released_line_end_bytes = other.released_line_end_bytes;
 #if ENABLE_GCODE_VIEWER_STATISTICS
             time = other.time;
 #endif
@@ -874,6 +888,7 @@ class Print;
         }
         void process_buffer(const std::string& buffer);
         void finalize(bool post_process);
+        void release_preview_storage();
 
         float get_time(PrintEstimatedStatistics::ETimeMode mode) const;
         float get_prepare_time(PrintEstimatedStatistics::ETimeMode mode) const;
@@ -1064,6 +1079,7 @@ class Print;
 
         //BBS: different path_type is only used for arc move
         void store_move_vertex(EMoveType type, EMovePathType path_type = EMovePathType::Noop_move, bool internal_only = false);
+        void capture_move_time_summary();
 
         void set_extrusion_role(ExtrusionRole role);
 
@@ -1113,5 +1129,3 @@ class Print;
 } /* namespace Slic3r */
 
 #endif /* slic3r_GCodeProcessor_hpp_ */
-
-

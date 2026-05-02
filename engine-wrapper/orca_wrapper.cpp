@@ -4057,8 +4057,21 @@ extern "C" int orca_slice(OrcaEngine* engine)
 #if defined(MOBILE_SLICER_ENABLE_VGCODE)
         engine->impl.cached_preview_input = libvgcode::GCodeInputData{};
         engine->impl.cached_preview_source_size = 0;
+        const size_t processor_move_count =
+            gcode_result.released_move_count > 0 ? gcode_result.released_move_count : gcode_result.moves.size();
+        const size_t processor_move_bytes =
+            gcode_result.released_move_bytes > 0 ?
+                gcode_result.released_move_bytes :
+                processor_move_count * sizeof(Slic3r::GCodeProcessorResult::MoveVertex);
+        const size_t processor_line_end_count =
+            gcode_result.released_line_end_count > 0 ? gcode_result.released_line_end_count : gcode_result.lines_ends.size();
+        const size_t processor_line_end_bytes =
+            gcode_result.released_line_end_bytes > 0 ?
+                gcode_result.released_line_end_bytes :
+                processor_line_end_count * sizeof(size_t);
+        const bool processor_moves_available = gcode_result.moves.size() >= 2;
         const bool exact_preview_cache_eligible =
-            gcode_result.moves.size() >= 2 &&
+            processor_moves_available &&
             gcode_result.moves.size() * static_cast<size_t>(2) <= static_cast<size_t>(kMaxCachedPreviewVertices);
         if (exact_preview_cache_eligible) {
             engine->impl.cached_preview_layer_counts = count_preview_vertices_by_layer_from_processor_result(gcode_result);
@@ -4069,7 +4082,7 @@ extern "C" int orca_slice(OrcaEngine* engine)
         }
         engine->impl.cached_preview_valid = false;
         engine->impl.cached_preview_complete = false;
-        const size_t preview_moves = gcode_result.moves.size();
+        const size_t preview_moves = processor_move_count;
         size_t processor_preview_vertices = 0;
         long processor_preview_build_ms = 0;
         if (exact_preview_cache_eligible) {
@@ -4106,15 +4119,16 @@ extern "C" int orca_slice(OrcaEngine* engine)
             "|previewCachedVertices=" + std::to_string(processor_preview_vertices) +
             "|previewCacheBuildMs=" + std::to_string(processor_preview_build_ms) +
             "|gcodeBytes=" + std::to_string(gcode_size) +
-            "|processorMoveBytes=" + std::to_string(preview_moves * sizeof(Slic3r::GCodeProcessorResult::MoveVertex)) +
-            "|processorLineEndBytes=" + std::to_string(gcode_result.lines_ends.size() * sizeof(size_t)) +
+            "|processorMoveBytes=" + std::to_string(processor_move_bytes) +
+            "|processorLineEndBytes=" + std::to_string(processor_line_end_bytes) +
             "|previewLayerCountBytes=" + std::to_string(engine->impl.cached_preview_layer_counts.size() * sizeof(size_t)) +
-            "|exactPreviewCacheEligible=" + std::string(exact_preview_cache_eligible ? "1" : "0");
+            "|exactPreviewCacheEligible=" + std::string(exact_preview_cache_eligible ? "1" : "0") +
+            "|processorMovesReleasedDuringExport=" + std::string(gcode_result.released_move_bytes > 0 ? "1" : "0");
 #else
         slice_metrics =
             "previewMoves=0|previewCacheBuilt=0|previewCacheComplete=0|previewCachedVertices=0|previewCacheBuildMs=0"
             "|gcodeBytes=" + std::to_string(gcode_size) +
-            "|processorMoveBytes=0|processorLineEndBytes=0|previewLayerCountBytes=0|exactPreviewCacheEligible=0";
+            "|processorMoveBytes=0|processorLineEndBytes=0|previewLayerCountBytes=0|exactPreviewCacheEligible=0|processorMovesReleasedDuringExport=0";
 #endif
         const long summary_parse_ms = elapsed_ms_since(summary_parse_start);
         const float normal_print_time = gcode_result.print_statistics

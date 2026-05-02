@@ -184,17 +184,27 @@ static std::string enrich_gcode_summary_from_processor(
     const double prepare_time = result.print_statistics.modes[normal_index].prepare_time;
     std::map<Slic3r::ExtrusionRole, double> role_times;
     std::map<libvgcode::EOptionType, double> option_times;
-    for (const auto& move : result.moves) {
-        const double seconds = move.time[normal_index];
-        if (seconds <= 0.0) {
-            continue;
-        }
-        if (move.type == Slic3r::EMoveType::Extrude) {
-            role_times[move.extrusion_role] += seconds;
-        } else {
-            const auto option = libvgcode_option_from_move_type(move.type);
+    if (result.move_time_summary_valid) {
+        role_times = result.move_role_times;
+        for (const auto& [move_type, seconds] : result.move_type_times) {
+            const auto option = libvgcode_option_from_move_type(move_type);
             if (option != libvgcode::EOptionType::COUNT) {
                 option_times[option] += seconds;
+            }
+        }
+    } else {
+        for (const auto& move : result.moves) {
+            const double seconds = move.time[normal_index];
+            if (seconds <= 0.0) {
+                continue;
+            }
+            if (move.type == Slic3r::EMoveType::Extrude) {
+                role_times[move.extrusion_role] += seconds;
+            } else {
+                const auto option = libvgcode_option_from_move_type(move.type);
+                if (option != libvgcode::EOptionType::COUNT) {
+                    option_times[option] += seconds;
+                }
             }
         }
     }

@@ -1583,6 +1583,13 @@ void GCodeProcessorResult::reset() {
     spiral_vase_mode = false;
     layer_filaments.clear();
     filament_change_count_map.clear();
+    move_time_summary_valid = false;
+    move_role_times.clear();
+    move_type_times.clear();
+    released_move_count = 0;
+    released_move_bytes = 0;
+    released_line_end_count = 0;
+    released_line_end_bytes = 0;
     warnings.clear();
 
     //BBS: add mutex for protection of gcode result
@@ -2610,6 +2617,7 @@ void GCodeProcessor::finalize(bool post_process)
     m_used_filaments.process_caches(this);
 
     update_estimated_times_stats();
+    capture_move_time_summary();
 
     m_result.initial_layer_time = get_first_layer_time(PrintEstimatedStatistics::ETimeMode::Normal);
 
@@ -2618,6 +2626,33 @@ void GCodeProcessor::finalize(bool post_process)
     }
     //BBS: update slice warning
     update_slice_warnings();
+}
+
+void GCodeProcessor::capture_move_time_summary()
+{
+    m_result.move_role_times.clear();
+    m_result.move_type_times.clear();
+    const size_t normal_index = static_cast<size_t>(PrintEstimatedStatistics::ETimeMode::Normal);
+    for (const GCodeProcessorResult::MoveVertex& move : m_result.moves) {
+        const double seconds = move.time[normal_index];
+        if (seconds <= 0.0)
+            continue;
+        if (move.type == EMoveType::Extrude)
+            m_result.move_role_times[move.extrusion_role] += seconds;
+        else
+            m_result.move_type_times[move.type] += seconds;
+    }
+    m_result.move_time_summary_valid = !m_result.move_role_times.empty() || !m_result.move_type_times.empty();
+}
+
+void GCodeProcessor::release_preview_storage()
+{
+    m_result.released_move_count = m_result.moves.size();
+    m_result.released_move_bytes = m_result.moves.size() * sizeof(GCodeProcessorResult::MoveVertex);
+    m_result.released_line_end_count = m_result.lines_ends.size();
+    m_result.released_line_end_bytes = m_result.lines_ends.size() * sizeof(size_t);
+    std::vector<GCodeProcessorResult::MoveVertex>().swap(m_result.moves);
+    std::vector<size_t>().swap(m_result.lines_ends);
 }
 
 float GCodeProcessor::get_time(PrintEstimatedStatistics::ETimeMode mode) const

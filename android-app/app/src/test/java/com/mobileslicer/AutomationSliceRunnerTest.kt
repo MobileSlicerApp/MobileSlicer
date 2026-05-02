@@ -42,6 +42,7 @@ class AutomationSliceRunnerTest {
                 processorLineEndBytes = 12,
                 previewLayerCountBytes = 13,
                 exactPreviewCacheEligible = true,
+                processorMovesReleasedDuringExport = true,
                 processorMoveBytesRetained = 0,
                 processorLineEndBytesRetained = 0,
                 processorReleaseMs = 14
@@ -83,6 +84,7 @@ class AutomationSliceRunnerTest {
         assertTrue(status.contains("processorLineEndBytes=12"))
         assertTrue(status.contains("previewLayerCountBytes=13"))
         assertTrue(status.contains("exactPreviewCacheEligible=1"))
+        assertTrue(status.contains("processorMovesReleasedDuringExport=1"))
         assertTrue(status.contains("processorMoveBytesRetained=0"))
         assertTrue(status.contains("processorLineEndBytesRetained=0"))
         assertTrue(status.contains("processorReleaseMs=14"))
@@ -108,7 +110,7 @@ class AutomationSliceRunnerTest {
         val metrics = parseAutomationSliceNativeMetrics(
             "previewMoves=123|previewCacheBuilt=1|previewCacheComplete=0|previewCachedVertices=456|previewCacheBuildMs=7" +
                 "|gcodeBytes=89|processorMoveBytes=100|processorLineEndBytes=11|previewLayerCountBytes=12|exactPreviewCacheEligible=1" +
-                "|processorMoveBytesRetained=0|processorLineEndBytesRetained=0|processorReleaseMs=3"
+                "|processorMovesReleasedDuringExport=1|processorMoveBytesRetained=0|processorLineEndBytesRetained=0|processorReleaseMs=3"
         )
 
         assertEquals(123L, metrics.previewMoves)
@@ -121,6 +123,7 @@ class AutomationSliceRunnerTest {
         assertEquals(11L, metrics.processorLineEndBytes)
         assertEquals(12L, metrics.previewLayerCountBytes)
         assertTrue(metrics.exactPreviewCacheEligible)
+        assertTrue(metrics.processorMovesReleasedDuringExport)
         assertEquals(0L, metrics.processorMoveBytesRetained)
         assertEquals(0L, metrics.processorLineEndBytesRetained)
         assertEquals(3L, metrics.processorReleaseMs)
