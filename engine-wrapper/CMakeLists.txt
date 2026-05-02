@@ -1,6 +1,8 @@
 add_library(orca_wrapper STATIC
     orca_wrapper.cpp
+    orca_wrapper_calibration.cpp
     orca_wrapper_gcode.cpp
+    orca_wrapper_model_overrides.cpp
     orca_wrapper_printable_validation.cpp
     orca_wrapper_utils.cpp
 )

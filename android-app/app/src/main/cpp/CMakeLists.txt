@@ -98,7 +98,9 @@ if (ORCA_SHIPPING_USE_REAL_LIBSLIC3R)
         if (TARGET orca_android_libslic3r_print_gcode_lib)
             set(ORCA_ENGINE_WRAPPER_SOURCE ../../../../../engine-wrapper/orca_wrapper.cpp)
             set(ORCA_ENGINE_WRAPPER_EXTRA_SOURCES
+                ../../../../../engine-wrapper/orca_wrapper_calibration.cpp
                 ../../../../../engine-wrapper/orca_wrapper_gcode.cpp
+                ../../../../../engine-wrapper/orca_wrapper_model_overrides.cpp
                 ../../../../../engine-wrapper/orca_wrapper_printable_validation.cpp
                 ../../../../../engine-wrapper/orca_wrapper_utils.cpp
             )
