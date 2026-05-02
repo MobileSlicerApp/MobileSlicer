@@ -35,6 +35,11 @@ AUTOMATION_LAST_PREVIEW_CACHE_BUILT=""
 AUTOMATION_LAST_PREVIEW_CACHE_COMPLETE=""
 AUTOMATION_LAST_PREVIEW_CACHED_VERTICES=""
 AUTOMATION_LAST_PREVIEW_CACHE_BUILD_MS=""
+AUTOMATION_LAST_PREVIEW_INFO_RICH=""
+AUTOMATION_LAST_PREVIEW_INFO_ENRICHED_RICH=""
+AUTOMATION_LAST_PREVIEW_INFO_LINE_TYPES=""
+AUTOMATION_LAST_PREVIEW_INFO_FILAMENTS=""
+AUTOMATION_LAST_PREVIEW_INFO_LAYERS=""
 AUTOMATION_LAST_PEAK_PSS_KB=""
 AUTOMATION_LAST_PEAK_JAVA_HEAP_KB=""
 AUTOMATION_LAST_PEAK_NATIVE_HEAP_KB=""
@@ -730,6 +735,11 @@ run_automation_slice() {
   AUTOMATION_LAST_PREVIEW_CACHE_COMPLETE="$(status_metric "$status" "previewCacheComplete")"
   AUTOMATION_LAST_PREVIEW_CACHED_VERTICES="$(status_metric "$status" "previewCachedVertices")"
   AUTOMATION_LAST_PREVIEW_CACHE_BUILD_MS="$(status_metric "$status" "previewCacheBuildMs")"
+  AUTOMATION_LAST_PREVIEW_INFO_RICH="$(status_metric "$status" "previewInfoRich")"
+  AUTOMATION_LAST_PREVIEW_INFO_ENRICHED_RICH="$(status_metric "$status" "previewInfoEnrichedRich")"
+  AUTOMATION_LAST_PREVIEW_INFO_LINE_TYPES="$(status_metric "$status" "previewInfoLineTypes")"
+  AUTOMATION_LAST_PREVIEW_INFO_FILAMENTS="$(status_metric "$status" "previewInfoFilaments")"
+  AUTOMATION_LAST_PREVIEW_INFO_LAYERS="$(status_metric "$status" "previewInfoLayers")"
   AUTOMATION_LAST_PEAK_PSS_KB="$PERF_LAST_PEAK_PSS_KB"
   AUTOMATION_LAST_PEAK_JAVA_HEAP_KB="$PERF_LAST_PEAK_JAVA_HEAP_KB"
   AUTOMATION_LAST_PEAK_NATIVE_HEAP_KB="$PERF_LAST_PEAK_NATIVE_HEAP_KB"
@@ -737,6 +747,18 @@ run_automation_slice() {
   AUTOMATION_LAST_PEAK_PRIVATE_OTHER_KB="$PERF_LAST_PEAK_PRIVATE_OTHER_KB"
   AUTOMATION_LAST_PEAK_SYSTEM_KB="$PERF_LAST_PEAK_SYSTEM_KB"
   clear_current_automation_context
+}
+
+assert_automation_preview_info_ready() {
+  local label="$1"
+  [[ "$AUTOMATION_LAST_PREVIEW_INFO_RICH" == "1" || "$AUTOMATION_LAST_PREVIEW_INFO_ENRICHED_RICH" == "1" ]] ||
+    fail "$label did not expose rich preview info summary data."
+  [[ "${AUTOMATION_LAST_PREVIEW_INFO_LINE_TYPES:-0}" =~ ^[0-9]+$ && "$AUTOMATION_LAST_PREVIEW_INFO_LINE_TYPES" -gt 0 ]] ||
+    fail "$label did not report preview info line types."
+  [[ "${AUTOMATION_LAST_PREVIEW_INFO_FILAMENTS:-0}" =~ ^[0-9]+$ && "$AUTOMATION_LAST_PREVIEW_INFO_FILAMENTS" -gt 0 ]] ||
+    fail "$label did not report preview info filaments."
+  [[ "${AUTOMATION_LAST_PREVIEW_INFO_LAYERS:-0}" =~ ^[0-9]+$ && "$AUTOMATION_LAST_PREVIEW_INFO_LAYERS" -gt 0 ]] ||
+    fail "$label did not report preview info layers."
 }
 
 run_automation_slice_expect_failure() {
@@ -1231,11 +1253,13 @@ run_slice_lifecycle_regression() {
   support_config="$(automation_config_with_overrides brim_width=0 enable_support=true support_type=normal\(auto\) support_style=default support_threshold_angle=10 support_on_build_plate_only=false)"
 
   run_automation_slice "$DEFAULT_SLICE_SMOKE_STL" "$serial" "lifecycle-valid-a" "0" "$baseline_config"
+  assert_automation_preview_info_ready "lifecycle-valid-a"
   local first_bytes="$AUTOMATION_LAST_BYTES"
   run_automation_slice_expect_failure "$invalid_stl" "$serial" "lifecycle-rejected-empty" "0" "$baseline_config"
   [[ "$AUTOMATION_LAST_STATUS" == *"nativeLoadModel failed"* || "$AUTOMATION_LAST_STATUS" == *"load"* ]] ||
     fail "Rejected lifecycle load did not report a load failure: $AUTOMATION_LAST_STATUS"
   run_automation_slice "$SUPPORT_SLICE_SMOKE_STL" "$serial" "lifecycle-valid-b" "0" "$support_config"
+  assert_automation_preview_info_ready "lifecycle-valid-b"
   local second_bytes="$AUTOMATION_LAST_BYTES"
   [[ "$first_bytes" != "$second_bytes" ]] ||
     fail "Lifecycle reload emitted the same byte count after model replacement; expected a distinct support fixture output."

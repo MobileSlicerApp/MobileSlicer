@@ -43,7 +43,9 @@ changes, pulls emitted G-code, and checks that the expected G-code geometry or c
 signals changed.
 `slice-lifecycle` runs valid, rejected, and valid automation loads and asserts the
 rejected load does not leave stale G-code output behind before a replacement model
-slices successfully.
+slices successfully. The valid slices also assert that native summary/enriched-summary
+data includes preview info line types, filament rows, and layer counts used by the
+preview info sheet.
 
 If device automation fails after a slice starts, the script captures context,
 logcat, crash logcat, status text, and G-code head/tail snippets under

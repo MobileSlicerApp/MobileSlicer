@@ -9,6 +9,7 @@ import com.mobileslicer.nativebridge.NativeEngineHandle
 import com.mobileslicer.nativebridge.isSuccess
 import com.mobileslicer.workspace.NativeModelTransform
 import com.mobileslicer.workspace.defaultNativeModelTransform
+import com.mobileslicer.workspace.GcodeSummaryParser
 import com.mobileslicer.viewer.PrinterBedSpec
 import com.mobileslicer.viewer.StlMeshParser
 import org.json.JSONObject
@@ -85,12 +86,21 @@ internal data class AutomationSliceNativeMetrics(
     val previewCacheBuildMs: Long = 0L
 )
 
+internal data class AutomationSlicePreviewInfoMetrics(
+    val summaryHasRichPreviewInfo: Boolean = false,
+    val enrichedHasRichPreviewInfo: Boolean = false,
+    val lineTypeCount: Int = 0,
+    val filamentCount: Int = 0,
+    val layerCount: Int = 0
+)
+
 internal fun automationSliceSuccessStatus(
     modelFile: File,
     stagedModel: File,
     outputFile: File,
     timing: AutomationSliceTiming,
     nativeMetrics: AutomationSliceNativeMetrics = AutomationSliceNativeMetrics(),
+    previewInfoMetrics: AutomationSlicePreviewInfoMetrics = AutomationSlicePreviewInfoMetrics(),
     configJson: String
 ): String =
     "success: model=${modelFile.absolutePath} " +
@@ -108,6 +118,11 @@ internal fun automationSliceSuccessStatus(
         "previewCacheComplete=${if (nativeMetrics.previewCacheComplete) 1 else 0} " +
         "previewCachedVertices=${nativeMetrics.previewCachedVertices} " +
         "previewCacheBuildMs=${nativeMetrics.previewCacheBuildMs} " +
+        "previewInfoRich=${if (previewInfoMetrics.summaryHasRichPreviewInfo) 1 else 0} " +
+        "previewInfoEnrichedRich=${if (previewInfoMetrics.enrichedHasRichPreviewInfo) 1 else 0} " +
+        "previewInfoLineTypes=${previewInfoMetrics.lineTypeCount} " +
+        "previewInfoFilaments=${previewInfoMetrics.filamentCount} " +
+        "previewInfoLayers=${previewInfoMetrics.layerCount} " +
         "elapsedMs=${timing.totalMs} " +
         "config=$configJson"
 
@@ -128,6 +143,20 @@ internal fun parseAutomationSliceNativeMetrics(metricsText: String?): Automation
         previewCacheComplete = fields["previewCacheComplete"] == "1",
         previewCachedVertices = fields["previewCachedVertices"]?.toLongOrNull() ?: 0L,
         previewCacheBuildMs = fields["previewCacheBuildMs"]?.toLongOrNull() ?: 0L
+    )
+}
+
+internal fun automationSlicePreviewInfoMetrics(summaryText: String?, enrichedSummaryText: String?): AutomationSlicePreviewInfoMetrics {
+    val summary = GcodeSummaryParser.fromNativeSummary(summaryText)
+    val enrichedSummary = GcodeSummaryParser.fromNativeSummary(enrichedSummaryText)
+    val richestSummary = listOfNotNull(enrichedSummary, summary)
+        .maxByOrNull { it.previewInfo.lineTypes.size + it.previewInfo.filaments.size }
+    return AutomationSlicePreviewInfoMetrics(
+        summaryHasRichPreviewInfo = summary?.previewInfo?.hasRichData == true,
+        enrichedHasRichPreviewInfo = enrichedSummary?.previewInfo?.hasRichData == true,
+        lineTypeCount = richestSummary?.previewInfo?.lineTypes?.size ?: 0,
+        filamentCount = richestSummary?.previewInfo?.filaments?.size ?: 0,
+        layerCount = richestSummary?.layerChangeCount ?: 0
     )
 }
 
@@ -241,6 +270,10 @@ internal class AutomationSliceRunner(
             return false
         }
         val nativeMetrics = parseAutomationSliceNativeMetrics(NativeEngineCalls.getSliceMetrics(engineHandle))
+        val previewInfoMetrics = automationSlicePreviewInfoMetrics(
+            summaryText = NativeEngineCalls.getGcodeSummary(engineHandle),
+            enrichedSummaryText = NativeEngineCalls.getEnrichedGcodeSummary(engineHandle)
+        )
         writeStatus(
             automationSliceSuccessStatus(
                 modelFile = modelFile,
@@ -256,6 +289,7 @@ internal class AutomationSliceRunner(
                     totalMs = SystemClock.elapsedRealtime() - startedAt
                 ),
                 nativeMetrics = nativeMetrics,
+                previewInfoMetrics = previewInfoMetrics,
                 configJson = configJson
             )
         )

@@ -2,6 +2,8 @@ package com.mobileslicer
 
 import com.mobileslicer.automation.AutomationSliceTiming
 import com.mobileslicer.automation.AutomationSliceNativeMetrics
+import com.mobileslicer.automation.AutomationSlicePreviewInfoMetrics
+import com.mobileslicer.automation.automationSlicePreviewInfoMetrics
 import com.mobileslicer.automation.automationSliceSuccessStatus
 import com.mobileslicer.automation.parseAutomationSliceNativeMetrics
 import java.io.File
@@ -35,6 +37,13 @@ class AutomationSliceRunnerTest {
                 previewCachedVertices = 8,
                 previewCacheBuildMs = 9
             ),
+            previewInfoMetrics = AutomationSlicePreviewInfoMetrics(
+                summaryHasRichPreviewInfo = true,
+                enrichedHasRichPreviewInfo = true,
+                lineTypeCount = 2,
+                filamentCount = 1,
+                layerCount = 42
+            ),
             configJson = """{"layer_height":0.2}"""
         )
 
@@ -51,6 +60,11 @@ class AutomationSliceRunnerTest {
         assertTrue(status.contains("previewCacheComplete=1"))
         assertTrue(status.contains("previewCachedVertices=8"))
         assertTrue(status.contains("previewCacheBuildMs=9"))
+        assertTrue(status.contains("previewInfoRich=1"))
+        assertTrue(status.contains("previewInfoEnrichedRich=1"))
+        assertTrue(status.contains("previewInfoLineTypes=2"))
+        assertTrue(status.contains("previewInfoFilaments=1"))
+        assertTrue(status.contains("previewInfoLayers=42"))
         assertTrue(status.contains("elapsedMs=21"))
         assertTrue(status.contains("""config={"layer_height":0.2}"""))
     }
@@ -66,5 +80,22 @@ class AutomationSliceRunnerTest {
         assertEquals(false, metrics.previewCacheComplete)
         assertEquals(456L, metrics.previewCachedVertices)
         assertEquals(7L, metrics.previewCacheBuildMs)
+    }
+
+    @Test
+    fun previewInfoMetricsPreferEnrichedSummaryCounts() {
+        val metrics = automationSlicePreviewInfoMetrics(
+            summaryText = "bytes=123|lines=10|layers=2|types=Wall",
+            enrichedSummaryText = "bytes=123|lines=7|layers=2|time=1h|grams=3.25" +
+                "|previewLineTypes=role,2,Outer wall,#FF7D38,12.5,20.0,1.0,2.96;option,0,Travel,#38489B,4.0,6.4,0.0,0.0" +
+                "|previewFilaments=1,Bambu PLA Basic,#00AA99,1.0,2.0,0.0,0.0,0.5,1.0,0.25,0.5,1.75,3.5,0.09" +
+                "|previewTotals=totalSeconds=60.0,prepareSeconds=5.0,modelSeconds=55.0,cost=0.09,filamentChanges=2,extruderChanges=1"
+        )
+
+        assertEquals(false, metrics.summaryHasRichPreviewInfo)
+        assertTrue(metrics.enrichedHasRichPreviewInfo)
+        assertEquals(2, metrics.lineTypeCount)
+        assertEquals(1, metrics.filamentCount)
+        assertEquals(2, metrics.layerCount)
     }
 }
