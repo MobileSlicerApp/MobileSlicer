@@ -1,6 +1,7 @@
 package com.mobileslicer.workspace
 
 import android.graphics.Bitmap
+import android.util.Log
 import com.mobileslicer.appBackgroundGradient
 import com.mobileslicer.profiles.ActiveSlicerConfiguration
 import com.mobileslicer.profiles.FilamentProfile
@@ -386,6 +387,21 @@ internal fun WorkspaceScreen(
                 }
             },
             onViewerReadyChanged = { runtimeViewerReady = it },
+            onPreviewRuntimeMetrics = { metrics ->
+                Log.i(
+                    "MobileSlicerPerf",
+                    "workspace_preview_runtime " +
+                        "previewKey=${metrics.previewKey} " +
+                        "layerStart=${metrics.layerStart} " +
+                        "layerEnd=${metrics.layerEnd} " +
+                        "vertexBudget=${metrics.vertexBudget} " +
+                        "nativeLoadMs=${metrics.nativeLoadMs} " +
+                        "firstFrameMs=${metrics.firstFrameMs} " +
+                        "lastFrameMs=${metrics.lastFrameMs} " +
+                        "slowFrames=${metrics.slowFrameCount} " +
+                        "frames=${metrics.renderedFrameCount}"
+                )
+            },
             onObjectSelected = { objectId ->
                 onPlateObjectSelected(objectId)
             },

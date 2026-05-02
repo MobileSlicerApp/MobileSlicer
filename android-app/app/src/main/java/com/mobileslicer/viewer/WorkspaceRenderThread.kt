@@ -4,13 +4,15 @@ import android.content.Context
 import android.graphics.Color
 import android.opengl.GLES20
 import android.opengl.Matrix
+import android.os.SystemClock
 import android.view.Surface
 import com.mobileslicer.nativebridge.NativeEngineCallResult
 
 internal class WorkspaceRenderThread(
     private val context: Context,
     private val onFailure: (ViewerFailure?) -> Unit,
-    private val onRenderReady: (Boolean) -> Unit
+    private val onRenderReady: (Boolean) -> Unit,
+    private val onPreviewRuntimeMetrics: (GcodePreviewRuntimeMetrics) -> Unit = {}
 ) : Thread("MobileSlicerWorkspaceRenderer") {
     private val stateLock = Object()
     private var shouldExit = false
@@ -30,6 +32,7 @@ internal class WorkspaceRenderThread(
     private var pendingGcodeLayerMin = 0L
     private var pendingGcodeLayerMax = Long.MAX_VALUE
     private var pendingGcodeLayerReloadToken = 0L
+    private var pendingGcodePreviewQueuedAtMs = 0L
     private var pendingGcodePathVisibility: Map<Pair<Int, Int>, Boolean> = emptyMap()
     private var pendingGcodeDisplayMode = GcodePreviewDisplayMode.Auto
     private var pendingCameraState: ViewerCameraState? = null
@@ -83,6 +86,7 @@ internal class WorkspaceRenderThread(
     private val gcodePreviewRenderer = GcodePreviewRenderer()
     private var activeGcodeLayerMin = 0L
     private var activeGcodeLayerMax = Long.MAX_VALUE
+    private var activeGcodePreviewQueuedAtMs = 0L
     private var activeGcodePathVisibility: Map<Pair<Int, Int>, Boolean> = emptyMap()
     private var activeGcodeDisplayMode = GcodePreviewDisplayMode.Auto
     private var appliedMeshVersion = -1L
@@ -115,6 +119,11 @@ internal class WorkspaceRenderThread(
     private var modelRotationZDegrees = 0f
     private var modelUniformScale = 1f
     private var viewerColors = buildViewerColors(activeAppearance)
+    private var activePreviewNativeLoadMs = 0L
+    private var activePreviewFirstFrameMs = -1L
+    private var activePreviewRenderedFrames = 0L
+    private var activePreviewSlowFrames = 0L
+    private var activePreviewLastMetricsReportAtMs = 0L
 
     fun setMesh(mesh: StlMesh?) {
         synchronized(stateLock) {
@@ -227,6 +236,7 @@ internal class WorkspaceRenderThread(
 
             if (sourceChanged || rangeDecision.shouldReloadPreview) {
                 gcodePreviewVersion++
+                pendingGcodePreviewQueuedAtMs = SystemClock.elapsedRealtime()
                 firstFrameCleared = false
             }
             if (rangeDecision.rangeChanged) {
@@ -262,6 +272,7 @@ internal class WorkspaceRenderThread(
             }
             if (updateDecision.shouldReloadPreview) {
                 gcodePreviewVersion++
+                pendingGcodePreviewQueuedAtMs = SystemClock.elapsedRealtime()
                 firstFrameCleared = false
             }
             if (failure != null) {
@@ -518,6 +529,7 @@ internal class WorkspaceRenderThread(
             activeGcodePreviewVertexBudget = pendingGcodePreviewVertexBudget
             activeGcodeLayerMin = pendingGcodeLayerMin
             activeGcodeLayerMax = pendingGcodeLayerMax
+            activeGcodePreviewQueuedAtMs = pendingGcodePreviewQueuedAtMs
             activeGcodePathVisibility = pendingGcodePathVisibility
             activeGcodeDisplayMode = pendingGcodeDisplayMode
             targetMeshVersion = meshVersion
@@ -572,12 +584,18 @@ internal class WorkspaceRenderThread(
                 appliedGcodeLayerRangeVersion = -1L
                 val requestedLayerMin = activeGcodeLayerMin
                 val requestedLayerMax = activeGcodeLayerMax
+                val loadStartedAtMs = SystemClock.elapsedRealtime()
                 val loadResult = gcodePreviewRenderer.loadLatestSlice(
                     engineRawHandle = previewEngineHandle,
                     requestedLayerMin,
                     requestedLayerMax,
                     activeGcodePreviewVertexBudget
                 )
+                activePreviewNativeLoadMs = SystemClock.elapsedRealtime() - loadStartedAtMs
+                activePreviewFirstFrameMs = -1L
+                activePreviewRenderedFrames = 0L
+                activePreviewSlowFrames = 0L
+                activePreviewLastMetricsReportAtMs = 0L
                 if (loadResult !is NativeEngineCallResult.Success) {
                     fail(
                         title = "G-code preview range too large",
@@ -631,6 +649,7 @@ internal class WorkspaceRenderThread(
     }
 
     private fun renderFrame(width: Int, height: Int) {
+        val frameStartedAtMs = SystemClock.elapsedRealtime()
         GLES20.glClearColor(viewerColors.clearColor[0], viewerColors.clearColor[1], viewerColors.clearColor[2], 1f)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
 
@@ -699,6 +718,11 @@ internal class WorkspaceRenderThread(
             }
             if (!firstFrameCleared) {
                 firstFrameCleared = true
+                activePreviewFirstFrameMs = if (activeGcodePreviewQueuedAtMs > 0L) {
+                    SystemClock.elapsedRealtime() - activeGcodePreviewQueuedAtMs
+                } else {
+                    activePreviewNativeLoadMs
+                }
                 onRenderReady(true)
             }
         } else if (objectUploadManager.uploads.isNotEmpty()) {
@@ -735,6 +759,35 @@ internal class WorkspaceRenderThread(
         }
 
         egl.swapBuffers()
+        if (gcodePreviewRenderer.isActive) {
+            val frameMs = SystemClock.elapsedRealtime() - frameStartedAtMs
+            activePreviewRenderedFrames++
+            if (frameMs > PreviewSlowFrameThresholdMs) {
+                activePreviewSlowFrames++
+            }
+            val shouldReportMetrics = activePreviewFirstFrameMs >= 0L &&
+                (
+                    activePreviewRenderedFrames == 1L ||
+                        frameMs > PreviewSlowFrameThresholdMs ||
+                        frameStartedAtMs - activePreviewLastMetricsReportAtMs >= PreviewMetricsReportIntervalMs
+                    )
+            if (shouldReportMetrics) {
+                activePreviewLastMetricsReportAtMs = frameStartedAtMs
+                onPreviewRuntimeMetrics(
+                    GcodePreviewRuntimeMetrics(
+                        previewKey = activeGcodePreviewKey,
+                        layerStart = activeGcodeLayerMin,
+                        layerEnd = activeGcodeLayerMax,
+                        vertexBudget = activeGcodePreviewVertexBudget,
+                        nativeLoadMs = activePreviewNativeLoadMs,
+                        firstFrameMs = activePreviewFirstFrameMs,
+                        lastFrameMs = frameMs,
+                        slowFrameCount = activePreviewSlowFrames,
+                        renderedFrameCount = activePreviewRenderedFrames
+                    )
+                )
+            }
+        }
     }
 
     private fun drawTransparentPlateSurface(upload: TriangleUpload) =
@@ -948,6 +1001,11 @@ internal class WorkspaceRenderThread(
 
     private fun releaseGcodeViewer() {
         gcodePreviewRenderer.release()
+        activePreviewNativeLoadMs = 0L
+        activePreviewFirstFrameMs = -1L
+        activePreviewRenderedFrames = 0L
+        activePreviewSlowFrames = 0L
+        activePreviewLastMetricsReportAtMs = 0L
         appliedGcodePreviewVersion = -1L
         appliedGcodeLayerRangeVersion = -1L
         appliedGcodePathVisibilityVersion = -1L
@@ -993,4 +1051,8 @@ internal class WorkspaceRenderThread(
         }
     }
 
+    private companion object {
+        private const val PreviewSlowFrameThresholdMs = 32L
+        private const val PreviewMetricsReportIntervalMs = 1_000L
+    }
 }

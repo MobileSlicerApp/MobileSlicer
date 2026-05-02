@@ -633,7 +633,10 @@ write_responsiveness_slice_report() {
     printf -- '- preview_plan: %s ms\n' "${AUTOMATION_LAST_PREVIEW_PLAN_MS:-unknown}"
     printf -- '- preview_load: %s ms\n' "${AUTOMATION_LAST_PREVIEW_LOAD_MS:-unknown}"
     printf -- '- preview_ranges: %s\n' "${AUTOMATION_LAST_PREVIEW_RANGES:-unknown}"
+    printf -- '- preview_requested_layers: %s\n' "${AUTOMATION_LAST_PREVIEW_REQUESTED_LAYERS:-unknown}"
     printf -- '- preview_loaded_layers: %s\n' "${AUTOMATION_LAST_PREVIEW_LOADED_LAYERS:-unknown}"
+    printf -- '- preview_planned_covered_layers: %s\n' "${AUTOMATION_LAST_PREVIEW_PLANNED_COVERED_LAYERS:-unknown}"
+    printf -- '- preview_vertex_budget: %s\n' "${AUTOMATION_LAST_PREVIEW_VERTEX_BUDGET:-unknown}"
     printf -- '- preview_load_success: %s\n\n' "${AUTOMATION_LAST_PREVIEW_LOAD_SUCCESS:-unknown}"
     printf '## Native Retained Data\n\n'
     printf -- '- native_gcode_bytes: %s\n' "${AUTOMATION_LAST_NATIVE_GCODE_BYTES:-unknown}"
@@ -991,9 +994,12 @@ run_automation_slice() {
   AUTOMATION_LAST_PREVIEW_PLAN_MS="$(status_metric "$status" "previewPlanMs")"
   AUTOMATION_LAST_PREVIEW_LOAD_MS="$(status_metric "$status" "previewLoadMs")"
   AUTOMATION_LAST_PREVIEW_RANGES="$(status_metric "$status" "previewRanges")"
+  AUTOMATION_LAST_PREVIEW_REQUESTED_LAYERS="$(status_metric "$status" "previewRequestedLayers")"
   AUTOMATION_LAST_PREVIEW_LOADED_START="$(status_metric "$status" "previewLoadedStart")"
   AUTOMATION_LAST_PREVIEW_LOADED_END="$(status_metric "$status" "previewLoadedEnd")"
   AUTOMATION_LAST_PREVIEW_LOADED_LAYERS="$(status_metric "$status" "previewLoadedLayers")"
+  AUTOMATION_LAST_PREVIEW_PLANNED_COVERED_LAYERS="$(status_metric "$status" "previewPlannedCoveredLayers")"
+  AUTOMATION_LAST_PREVIEW_VERTEX_BUDGET="$(status_metric "$status" "previewVertexBudget")"
   AUTOMATION_LAST_PREVIEW_LOAD_SUCCESS="$(status_metric "$status" "previewLoadSuccess")"
   AUTOMATION_LAST_PREVIEW_LOAD_GL_UNAVAILABLE="$(status_metric "$status" "previewLoadGlUnavailable")"
   AUTOMATION_LAST_NATIVE_GCODE_BYTES="$(status_metric "$status" "nativeGcodeBytes")"
@@ -1039,6 +1045,12 @@ assert_automation_preview_plan_ready() {
     fail "$label did not report planned preview ranges."
   [[ "${AUTOMATION_LAST_PREVIEW_LOADED_LAYERS:-0}" =~ ^[0-9]+$ && "$AUTOMATION_LAST_PREVIEW_LOADED_LAYERS" -gt 0 ]] ||
     fail "$label did not report a selected preview range."
+  [[ "${AUTOMATION_LAST_PREVIEW_REQUESTED_LAYERS:-0}" =~ ^[0-9]+$ && "$AUTOMATION_LAST_PREVIEW_REQUESTED_LAYERS" -gt 0 ]] ||
+    fail "$label did not report requested preview layers."
+  [[ "${AUTOMATION_LAST_PREVIEW_PLANNED_COVERED_LAYERS:-0}" =~ ^[0-9]+$ && "$AUTOMATION_LAST_PREVIEW_PLANNED_COVERED_LAYERS" -ge "$AUTOMATION_LAST_PREVIEW_REQUESTED_LAYERS" ]] ||
+    fail "$label preview ranges do not cover the requested layer count."
+  [[ "${AUTOMATION_LAST_PREVIEW_VERTEX_BUDGET:-0}" =~ ^[0-9]+$ && "$AUTOMATION_LAST_PREVIEW_VERTEX_BUDGET" -gt 0 ]] ||
+    fail "$label did not report the preview vertex budget."
   [[ "${AUTOMATION_LAST_PREVIEW_PLAN_MS:-0}" =~ ^[0-9]+$ ]] ||
     fail "$label did not report preview range planning time."
   [[ "${AUTOMATION_LAST_PREVIEW_LOAD_MS:-0}" =~ ^[0-9]+$ ]] ||

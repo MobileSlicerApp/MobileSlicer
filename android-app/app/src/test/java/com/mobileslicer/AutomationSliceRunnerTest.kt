@@ -65,9 +65,12 @@ class AutomationSliceRunnerTest {
                 rangePlanMs = 10,
                 viewerLoadMs = 11,
                 plannedRangeCount = 3,
+                requestedLayerCount = 42,
                 loadedStartLayer = 1,
                 loadedEndLayer = 14,
                 loadedLayerCount = 14,
+                plannedCoveredLayers = 42,
+                vertexBudget = 2_000_000,
                 success = true
             ),
             configJson = """{"layer_height":0.2}"""
@@ -110,9 +113,12 @@ class AutomationSliceRunnerTest {
         assertTrue(status.contains("previewPlanMs=10"))
         assertTrue(status.contains("previewLoadMs=11"))
         assertTrue(status.contains("previewRanges=3"))
+        assertTrue(status.contains("previewRequestedLayers=42"))
         assertTrue(status.contains("previewLoadedStart=1"))
         assertTrue(status.contains("previewLoadedEnd=14"))
         assertTrue(status.contains("previewLoadedLayers=14"))
+        assertTrue(status.contains("previewPlannedCoveredLayers=42"))
+        assertTrue(status.contains("previewVertexBudget=2000000"))
         assertTrue(status.contains("previewLoadSuccess=1"))
         assertTrue(status.contains("previewLoadGlUnavailable=0"))
         assertTrue(status.contains("elapsedMs=21"))

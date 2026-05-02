@@ -119,9 +119,12 @@ internal data class AutomationSlicePreviewLoadMetrics(
     val rangePlanMs: Long = 0L,
     val viewerLoadMs: Long = 0L,
     val plannedRangeCount: Int = 0,
+    val requestedLayerCount: Int = 0,
     val loadedStartLayer: Int = 0,
     val loadedEndLayer: Int = 0,
     val loadedLayerCount: Int = 0,
+    val plannedCoveredLayers: Int = 0,
+    val vertexBudget: Long = 0L,
     val success: Boolean = false,
     val unavailableWithoutGlContext: Boolean = false,
     val failure: String = ""
@@ -176,9 +179,12 @@ internal fun automationSliceSuccessStatus(
         "previewPlanMs=${previewLoadMetrics.rangePlanMs} " +
         "previewLoadMs=${previewLoadMetrics.viewerLoadMs} " +
         "previewRanges=${previewLoadMetrics.plannedRangeCount} " +
+        "previewRequestedLayers=${previewLoadMetrics.requestedLayerCount} " +
         "previewLoadedStart=${previewLoadMetrics.loadedStartLayer} " +
         "previewLoadedEnd=${previewLoadMetrics.loadedEndLayer} " +
         "previewLoadedLayers=${previewLoadMetrics.loadedLayerCount} " +
+        "previewPlannedCoveredLayers=${previewLoadMetrics.plannedCoveredLayers} " +
+        "previewVertexBudget=${previewLoadMetrics.vertexBudget} " +
         "previewLoadSuccess=${if (previewLoadMetrics.success) 1 else 0} " +
         "previewLoadGlUnavailable=${if (previewLoadMetrics.unavailableWithoutGlContext) 1 else 0} " +
         previewLoadMetrics.failure.takeIf { it.isNotBlank() }?.let { "previewLoadFailure=${it.sanitizeStatusToken()} " }.orEmpty() +
@@ -241,7 +247,7 @@ internal fun automationSlicePreviewLoadMetrics(
     vertexBudget: Long = DefaultPreviewVertexBudget
 ): AutomationSlicePreviewLoadMetrics {
     if (layerCount <= 0) {
-        return AutomationSlicePreviewLoadMetrics(failure = "missing-layers")
+        return AutomationSlicePreviewLoadMetrics(failure = "missing-layers", vertexBudget = vertexBudget)
     }
     val planStartedAt = SystemClock.elapsedRealtime()
     val rawPlan = NativeEngineCalls.planLatestSlicePreviewRanges(
@@ -255,15 +261,22 @@ internal fun automationSlicePreviewLoadMetrics(
     val firstRange = ranges.firstOrNull()
         ?: return AutomationSlicePreviewLoadMetrics(
             rangePlanMs = planMs,
+            requestedLayerCount = layerCount,
+            vertexBudget = vertexBudget,
             failure = NativeEngineCalls.getLastErrorMessage(engineHandle).ifBlank { "no-preview-ranges" }
         )
     val loadedLayerCount = (firstRange.endLayer - firstRange.startLayer + 1).coerceAtLeast(0)
     return AutomationSlicePreviewLoadMetrics(
         rangePlanMs = planMs,
         plannedRangeCount = ranges.size,
+        requestedLayerCount = layerCount,
         loadedStartLayer = firstRange.startLayer,
         loadedEndLayer = firstRange.endLayer,
         loadedLayerCount = loadedLayerCount,
+        plannedCoveredLayers = ranges.sumOf { range ->
+            (range.endLayer - range.startLayer + 1).coerceAtLeast(0)
+        },
+        vertexBudget = vertexBudget,
         unavailableWithoutGlContext = true,
         failure = "non-ui-opengl-context-unavailable"
     )

@@ -169,6 +169,7 @@ internal fun WorkspaceViewerSurface(
     gcodeDisplayMode: GcodePreviewDisplayMode?,
     onRuntimeFailureChanged: (com.mobileslicer.viewer.ViewerFailure?) -> Unit,
     onViewerReadyChanged: (Boolean) -> Unit,
+    onPreviewRuntimeMetrics: (com.mobileslicer.viewer.GcodePreviewRuntimeMetrics) -> Unit,
     onObjectSelected: (Long?) -> Unit,
     onViewerViewChanged: (TouchModelViewerView?) -> Unit
 ) {
@@ -192,6 +193,7 @@ internal fun WorkspaceViewerSurface(
                             setViewerAppearance(darkTheme = darkTheme, accentColor = accentColor, worldColor = worldColor)
                             setFailureListener(onRuntimeFailureChanged)
                             setRenderReadyListener(onViewerReadyChanged)
+                            setPreviewRuntimeMetricsListener(onPreviewRuntimeMetrics)
                             setObjectSelectionListener(onObjectSelected)
                             setModelTransform(modelTransform)
                             setPlateObjects(plateObjects)
@@ -215,6 +217,7 @@ internal fun WorkspaceViewerSurface(
                         view.setViewerAppearance(darkTheme = darkTheme, accentColor = accentColor, worldColor = worldColor)
                         view.setFailureListener(onRuntimeFailureChanged)
                         view.setRenderReadyListener(onViewerReadyChanged)
+                        view.setPreviewRuntimeMetricsListener(onPreviewRuntimeMetrics)
                         view.setObjectSelectionListener(onObjectSelected)
                         view.setModelTransform(modelTransform)
                         view.setPlateObjects(plateObjects)

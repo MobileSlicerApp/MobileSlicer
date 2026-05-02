@@ -46,6 +46,7 @@ internal class TouchModelViewerView @JvmOverloads constructor(
     private var renderThread: WorkspaceRenderThread? = null
     private var onViewerFailure: ((ViewerFailure?) -> Unit)? = null
     private var onRenderReady: ((Boolean) -> Unit)? = null
+    private var onPreviewRuntimeMetrics: ((GcodePreviewRuntimeMetrics) -> Unit)? = null
     private var onObjectSelected: ((Long?) -> Unit)? = null
     private var currentMesh: StlMesh? = null
     private var currentPlateObjects: List<ViewerPlateObject> = emptyList()
@@ -224,6 +225,10 @@ internal class TouchModelViewerView @JvmOverloads constructor(
         onRenderReady = listener
     }
 
+    internal fun setPreviewRuntimeMetricsListener(listener: (GcodePreviewRuntimeMetrics) -> Unit) {
+        onPreviewRuntimeMetrics = listener
+    }
+
     internal fun setObjectSelectionListener(listener: (Long?) -> Unit) {
         onObjectSelected = listener
     }
@@ -378,7 +383,8 @@ internal class TouchModelViewerView @JvmOverloads constructor(
         val thread = WorkspaceRenderThread(
             context = context.applicationContext,
             onFailure = { failure -> post { onViewerFailure?.invoke(failure) } },
-            onRenderReady = { ready -> post { onRenderReady?.invoke(ready) } }
+            onRenderReady = { ready -> post { onRenderReady?.invoke(ready) } },
+            onPreviewRuntimeMetrics = { metrics -> post { onPreviewRuntimeMetrics?.invoke(metrics) } }
         )
         renderThread = thread
         thread.start()

@@ -12,6 +12,18 @@ internal data class PreviewRangeSuggestion(
     val endLayer: Int
 )
 
+internal data class GcodePreviewRuntimeMetrics(
+    val previewKey: Long,
+    val layerStart: Long,
+    val layerEnd: Long,
+    val vertexBudget: Long,
+    val nativeLoadMs: Long,
+    val firstFrameMs: Long,
+    val lastFrameMs: Long,
+    val slowFrameCount: Long,
+    val renderedFrameCount: Long
+)
+
 internal data class StlModelPlacement(
     val xMm: Float,
     val yMm: Float,
