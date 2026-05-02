@@ -47,6 +47,7 @@ import com.mobileslicer.profiles.activeConfiguration
 import com.mobileslicer.profiles.buildOrcaFilamentPickerRows
 import com.mobileslicer.profiles.filteredOrcaFilamentPickerRows
 import com.mobileslicer.profiles.isReplaceableOrcaGenericMaterialFor
+import com.mobileslicer.profiles.orcaFilamentCompatibleKeysCache
 import com.mobileslicer.profiles.resolveOrcaFilamentPresetForImport
 import com.mobileslicer.profiles.toImportedPrinterProfile
 import org.junit.Assert.assertEquals
@@ -55,6 +56,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProfileModelsTest {
+    @Test
+    fun filamentCompatibleKeyCacheIsBounded() {
+        synchronized(orcaFilamentCompatibleKeysCache) {
+            orcaFilamentCompatibleKeysCache.clear()
+            repeat(600) { index ->
+                orcaFilamentCompatibleKeysCache["preset_$index"] = listOf("printer_$index")
+            }
+            assertTrue(orcaFilamentCompatibleKeysCache.size <= 512)
+        }
+    }
+
     @Test
     fun activeConfigurationDoesNotUseStaleProcessFromAnotherPrinter() {
         val printerA = ProfileStoreRepository.fallbackPrinterProfile().copy(

@@ -256,7 +256,12 @@ internal fun String.detectFilamentMaterial(): String? {
     }
 }
 
-internal val orcaFilamentCompatibleKeysCache = Collections.synchronizedMap(mutableMapOf<String, List<String>>())
+internal val orcaFilamentCompatibleKeysCache = Collections.synchronizedMap(
+    object : LinkedHashMap<String, List<String>>(256, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<String>>?): Boolean =
+            size > 512
+    }
+)
 internal val orcaFilamentCompatibilityCache = Collections.synchronizedMap(
     object : LinkedHashMap<String, Boolean>(256, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean =
