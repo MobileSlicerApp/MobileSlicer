@@ -39,8 +39,17 @@ jobs:
       - name: Validate native stub inventory
         run: scripts/verify_android.sh stubs
 
+      - name: Run verification script syntax checks
+        run: scripts/verify_android.sh script-tests
+
+      - name: Run Orca asset generator tests
+        run: scripts/verify_android.sh asset-tests
+
       - name: Run Android lint
         run: scripts/verify_android.sh lint
 
       - name: Run JVM unit tests
         run: scripts/verify_android.sh unit
+
+      - name: Run release compile, lint, and R8 checks
+        run: scripts/verify_android.sh release

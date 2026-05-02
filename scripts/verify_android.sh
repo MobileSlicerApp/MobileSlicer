@@ -8,7 +8,13 @@ PACKAGE_NAME="com.mobileslicer"
 MAIN_ACTIVITY="com.mobileslicer/.MainActivity"
 AUTOMATION_ACTION="com.mobileslicer.action.AUTOMATE_SLICE"
 DEFAULT_SERIAL="RFCYA01ANVE"
+DEFAULT_SLICE_SMOKE_STL="$ROOT_DIR/mobileslicer_test_cube.stl"
+SUPPORT_SLICE_SMOKE_STL="$ROOT_DIR/proof-fixtures/stage2_bridge_speed_fixture.stl"
 BENCHY_AUTOMATION_CONFIG='{"bed_width_mm":270,"bed_depth_mm":270,"max_height_mm":256,"nozzle_diameter":0.4000000059604645,"filament_diameter":1.75,"filament_type":"PLA","filament_max_volumetric_speed":50,"nozzle_temperature_initial_layer":210,"nozzle_temperature":210,"bed_temperature_initial_layer":60,"bed_temperature":60,"cooling_baseline":100,"close_fan_the_first_x_layers":1,"layer_height":0.20000000298023224,"first_layer_height":0.20000000298023224,"first_layer_print_speed":10,"first_layer_infill_speed":22.5,"initial_layer_travel_speed_percent":50,"slow_down_layers":0,"outer_wall_speed":30,"inner_wall_speed":30,"top_surface_speed":30,"travel_speed":120,"outer_wall_acceleration":500,"inner_wall_acceleration":10000,"top_surface_acceleration":500,"sparse_infill_acceleration":500,"bridge_speed":10,"small_perimeter_speed":15,"small_perimeter_threshold":0,"sparse_infill_speed":300,"internal_solid_infill_speed":30,"gap_infill_speed":15,"top_shell_layers":4,"bottom_shell_layers":3,"seam_position":"aligned","precise_outer_wall":true,"only_one_wall_top":true,"top_surface_pattern":"monotonicline","sparse_infill_density":15,"sparse_infill_pattern":"grid","wall_loops":2,"print_speed_baseline":60,"skirts":2,"brim_width":0}'
+CURRENT_AUTOMATION_SERIAL=""
+CURRENT_AUTOMATION_LABEL=""
+CURRENT_AUTOMATION_OUTPUT_PATH=""
+CURRENT_AUTOMATION_STATUS_PATH=""
 
 usage() {
   cat <<'USAGE'
@@ -16,12 +22,15 @@ Usage:
   scripts/verify_android.sh unit
   scripts/verify_android.sh lint
   scripts/verify_android.sh stubs
+  scripts/verify_android.sh script-tests
+  scripts/verify_android.sh asset-tests
   scripts/verify_android.sh apk
   scripts/verify_android.sh release
   scripts/verify_android.sh local
   scripts/verify_android.sh install [serial]
   scripts/verify_android.sh device [serial]
   scripts/verify_android.sh device-automation [serial]
+  scripts/verify_android.sh slice-regression [serial]
   scripts/verify_android.sh profile-ui [serial]
   scripts/verify_android.sh benchy <local-stl-path> [serial]
   scripts/verify_android.sh all [serial]
@@ -30,6 +39,10 @@ Modes:
   unit    Run JVM debug unit tests.
   lint    Run Android lint for the debug variant.
   stubs   Validate the Android Orca native stub inventory.
+  script-tests
+          Run shell syntax checks for verification scripts.
+  asset-tests
+          Run script tests for generated Orca Android profile assets.
   apk     Build the debug APK.
   release Run release compile/lint/R8 checks. Builds the signed release APK
           when release signing credentials are configured.
@@ -38,7 +51,12 @@ Modes:
   device  Alias for install; no UI automation, log pulls, or runtime probing.
   device-automation
           Build, install, cold-launch, and assert the process stays alive with
-          an empty crash buffer. Requires MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
+          an empty crash buffer, then slice the cube fixture.
+          Requires MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
+  slice-regression
+          Build, install, run a physical-device slicing parameter matrix, pull
+          emitted G-code, and assert expected geometry/G-code changes.
+          Requires MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
   profile-ui
           Build, install, cold-launch, and assert the process stays alive with
           an empty crash buffer. Requires MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
@@ -58,6 +76,48 @@ fail() {
   printf '[verify_android] ERROR: %s\n' "$*" >&2
   exit 1
 }
+
+capture_device_artifacts() {
+  local exit_code="$1"
+  if [[ -z "$CURRENT_AUTOMATION_SERIAL" ]]; then
+    return 0
+  fi
+  local artifact_root="$ROOT_DIR/artifacts/device-automation"
+  local stamp
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  local safe_label="${CURRENT_AUTOMATION_LABEL:-unknown}"
+  safe_label="${safe_label//[^A-Za-z0-9_.-]/_}"
+  local artifact_dir="$artifact_root/$stamp-$safe_label"
+  mkdir -p "$artifact_dir"
+  {
+    printf 'exit_code=%s\n' "$exit_code"
+    printf 'serial=%s\n' "$CURRENT_AUTOMATION_SERIAL"
+    printf 'label=%s\n' "$CURRENT_AUTOMATION_LABEL"
+    printf 'output_path=%s\n' "$CURRENT_AUTOMATION_OUTPUT_PATH"
+    printf 'status_path=%s\n' "$CURRENT_AUTOMATION_STATUS_PATH"
+  } > "$artifact_dir/context.txt"
+  adb_device "$CURRENT_AUTOMATION_SERIAL" logcat -d -v time > "$artifact_dir/logcat.txt" 2>&1 || true
+  adb_device "$CURRENT_AUTOMATION_SERIAL" logcat -b crash -d -v time > "$artifact_dir/crash-logcat.txt" 2>&1 || true
+  if [[ -n "$CURRENT_AUTOMATION_STATUS_PATH" ]] &&
+      adb_device "$CURRENT_AUTOMATION_SERIAL" shell run-as "$PACKAGE_NAME" test -f "$CURRENT_AUTOMATION_STATUS_PATH"; then
+    adb_device "$CURRENT_AUTOMATION_SERIAL" exec-out run-as "$PACKAGE_NAME" cat "$CURRENT_AUTOMATION_STATUS_PATH" > "$artifact_dir/status.txt" 2>&1 || true
+  fi
+  if [[ -n "$CURRENT_AUTOMATION_OUTPUT_PATH" ]] &&
+      adb_device "$CURRENT_AUTOMATION_SERIAL" shell run-as "$PACKAGE_NAME" test -f "$CURRENT_AUTOMATION_OUTPUT_PATH"; then
+    adb_device "$CURRENT_AUTOMATION_SERIAL" exec-out run-as "$PACKAGE_NAME" sh -c "head -n 200 '$CURRENT_AUTOMATION_OUTPUT_PATH'" > "$artifact_dir/gcode-head.txt" 2>&1 || true
+    adb_device "$CURRENT_AUTOMATION_SERIAL" exec-out run-as "$PACKAGE_NAME" sh -c "tail -n 200 '$CURRENT_AUTOMATION_OUTPUT_PATH'" > "$artifact_dir/gcode-tail.txt" 2>&1 || true
+  fi
+  log "Captured device automation artifacts: $artifact_dir"
+}
+
+on_error() {
+  local exit_code="$?"
+  trap - ERR
+  capture_device_artifacts "$exit_code" || true
+  exit "$exit_code"
+}
+
+trap on_error ERR
 
 adb_bin() {
   if [[ -x "$ROOT_DIR/tools/adb" ]]; then
@@ -99,6 +159,17 @@ run_stub_inventory() {
   "$ROOT_DIR/scripts/verify_stub_inventory.py"
 }
 
+run_script_tests() {
+  log "Running verification script syntax checks"
+  bash -n "$ROOT_DIR/scripts/verify_android.sh"
+  python3 -m py_compile "$ROOT_DIR"/scripts/*.py
+}
+
+run_asset_generator_tests() {
+  log "Running Orca asset generator script tests"
+  (cd "$ROOT_DIR" && python3 scripts/test_generate_orca_printer_assets.py)
+}
+
 build_apk() {
   log "Building debug APK"
   gradle assembleDebug
@@ -108,6 +179,9 @@ build_apk() {
 
 build_release_apk() {
   local signing_configured=0
+  local version_name="${MOBILE_SLICER_VERSION_NAME:-0.1.0}"
+  local version_code="${MOBILE_SLICER_VERSION_CODE:-1}"
+  log "Release version inputs: versionName=$version_name versionCode=$version_code"
   if [[ -n "${MOBILE_SLICER_RELEASE_STORE_FILE:-}" &&
         -n "${MOBILE_SLICER_RELEASE_STORE_PASSWORD:-}" &&
         -n "${MOBILE_SLICER_RELEASE_KEY_ALIAS:-}" &&
@@ -126,6 +200,7 @@ build_release_apk() {
   else
     log "Release signing not configured; running release compile, lint, and R8 checks without packaging."
     gradle :app:compileReleaseKotlin :app:lintVitalRelease :app:minifyReleaseWithR8
+    log "Release compile, lintVital, and R8 checks passed"
   fi
 }
 
@@ -151,6 +226,12 @@ require_device() {
   local serial="$1"
   log "Checking device $serial"
   adb_device "$serial" get-state >/dev/null
+}
+
+require_automation_fixture() {
+  local path="$1"
+  local description="$2"
+  [[ -f "$path" ]] || fail "$description fixture is missing: $path"
 }
 
 install_apk() {
@@ -229,6 +310,15 @@ assert_text_visible() {
   log "Verified UI text: $text"
 }
 
+assert_device_unlocked_for_ui() {
+  local serial="$1"
+  local xml
+  xml="$(dump_ui_xml "$serial")"
+  if [[ "$xml" == *"keyguard"* || "$xml" == *"Enter PIN"* ]]; then
+    fail "Device is locked. Unlock $serial before running profile-ui automation."
+  fi
+}
+
 ensure_home_visible() {
   local serial="$1"
   for _ in 1 2 3 4; do
@@ -249,9 +339,28 @@ run_install_only() {
 run_device_automation_smoke() {
   local serial="$1"
   require_device_automation
+  require_automation_fixture "$DEFAULT_SLICE_SMOKE_STL" "default slice smoke STL"
   install_apk "$serial"
   launch_app "$serial"
   assert_no_crash_after_launch "$serial"
+  run_automation_slice "$DEFAULT_SLICE_SMOKE_STL" "$serial" "device-smoke" "0"
+  assert_no_crash_after_launch "$serial"
+}
+
+automation_config_with_overrides() {
+  python3 - "$BENCHY_AUTOMATION_CONFIG" "$@" <<'PY'
+import json
+import sys
+
+config = json.loads(sys.argv[1])
+for override in sys.argv[2:]:
+    key, value = override.split("=", 1)
+    try:
+        config[key] = json.loads(value)
+    except json.JSONDecodeError:
+        config[key] = value
+print(json.dumps(config, separators=(",", ":")))
+PY
 }
 
 run_profile_ui_smoke() {
@@ -259,6 +368,7 @@ run_profile_ui_smoke() {
   require_device_automation
   install_apk "$serial"
   launch_app "$serial"
+  assert_device_unlocked_for_ui "$serial"
   ensure_home_visible "$serial"
   tap_text "$serial" "Open Profiles"
   assert_text_visible "$serial" "Profiles"
@@ -307,24 +417,29 @@ wait_for_status() {
   fail "Timed out waiting for automation status: $status_path"
 }
 
-run_benchy() {
+run_automation_slice() {
   local local_stl="$1"
   local serial="$2"
-  require_device_automation
-  install_apk "$serial"
+  local label="$3"
+  local should_install="${4:-1}"
+  local config_json="${5:-$BENCHY_AUTOMATION_CONFIG}"
+  if [[ "$should_install" == "1" ]]; then
+    install_apk "$serial"
+  fi
 
   local app_model_path
   app_model_path="$(stage_app_private_file "$serial" "$local_stl" | tail -n 1)"
   local stamp
   stamp="$(date +%Y%m%d-%H%M%S)"
-  local output_path="/data/data/$PACKAGE_NAME/files/automation/benchy-$stamp.gcode"
+  local output_path="/data/data/$PACKAGE_NAME/files/automation/$label-$stamp.gcode"
   local status_path="$output_path.status.txt"
+  set_current_automation_context "$serial" "$label" "$output_path" "$status_path"
 
-  log "Running automation slice on $serial"
+  log "Running automation slice '$label' on $serial"
   adb_device "$serial" shell run-as "$PACKAGE_NAME" rm -f "$output_path" "$status_path"
   adb_device "$serial" shell am force-stop "$PACKAGE_NAME"
   adb_device "$serial" logcat -c
-  adb_device "$serial" shell "CONFIG='$BENCHY_AUTOMATION_CONFIG'; am start -W \
+  adb_device "$serial" shell "CONFIG='$config_json'; am start -W \
     -a '$AUTOMATION_ACTION' \
     -n '$MAIN_ACTIVITY' \
     --es automation_model_path '$app_model_path' \
@@ -333,9 +448,202 @@ run_benchy() {
     --es automation_config_json \"\$CONFIG\""
 
   log "Automation status"
-  wait_for_status "$serial" "$status_path"
+  local status
+  status="$(wait_for_status "$serial" "$status_path")"
+  printf '%s\n' "$status"
+  [[ "$status" == success:* ]] || fail "Automation slice did not report success."
   log "Output file"
   adb_device "$serial" shell run-as "$PACKAGE_NAME" ls -lh "$output_path"
+  local output_bytes
+  output_bytes="$(adb_device "$serial" shell run-as "$PACKAGE_NAME" wc -c "$output_path" | awk '{print $1}')"
+  [[ "$output_bytes" =~ ^[0-9]+$ ]] || fail "Unable to read automation G-code byte count."
+  [[ "$output_bytes" -gt 1024 ]] || fail "Automation G-code output is unexpectedly small: $output_bytes bytes."
+  log "Automation G-code output verified: $output_bytes bytes"
+  AUTOMATION_LAST_OUTPUT_PATH="$output_path"
+  AUTOMATION_LAST_STATUS="$status"
+  AUTOMATION_LAST_BYTES="$output_bytes"
+  clear_current_automation_context
+}
+
+set_current_automation_context() {
+  CURRENT_AUTOMATION_SERIAL="$1"
+  CURRENT_AUTOMATION_LABEL="$2"
+  CURRENT_AUTOMATION_OUTPUT_PATH="$3"
+  CURRENT_AUTOMATION_STATUS_PATH="$4"
+}
+
+clear_current_automation_context() {
+  CURRENT_AUTOMATION_SERIAL=""
+  CURRENT_AUTOMATION_LABEL=""
+  CURRENT_AUTOMATION_OUTPUT_PATH=""
+  CURRENT_AUTOMATION_STATUS_PATH=""
+}
+
+run_benchy() {
+  local local_stl="$1"
+  local serial="$2"
+  require_device_automation
+  run_automation_slice "$local_stl" "$serial" "benchy"
+}
+
+pull_app_private_file() {
+  local serial="$1"
+  local app_path="$2"
+  local local_path="$3"
+  adb_device "$serial" exec-out run-as "$PACKAGE_NAME" cat "$app_path" > "$local_path"
+  [[ -s "$local_path" ]] || fail "Pulled file is empty: $local_path"
+}
+
+analyze_slice_regression_matrix() {
+  local directory="$1"
+  python3 - "$directory" <<'PY'
+import math
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+word_re = re.compile(r"([A-Z])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))", re.I)
+
+def parse(path):
+    text = path.read_text(errors="replace")
+    x = y = z = e = 0.0
+    absolute_xyz = True
+    absolute_e = True
+    first_z = None
+    bounds = [math.inf, -math.inf, math.inf, -math.inf]
+    first_layer_feedrates = []
+    all_feedrates = []
+    feedrate = 0.0
+    nozzle = set()
+    bed = set()
+    types = set()
+    for raw in text.splitlines():
+        if raw.startswith(";TYPE:"):
+            types.add(raw.split(":", 1)[1].strip())
+            continue
+        command = raw.split(";", 1)[0].strip()
+        if not command:
+            continue
+        upper = command.upper()
+        if upper == "G90":
+            absolute_xyz = True
+            continue
+        if upper == "G91":
+            absolute_xyz = False
+            continue
+        if upper == "M82":
+            absolute_e = True
+            continue
+        if upper == "M83":
+            absolute_e = False
+            continue
+        words = {key.upper(): float(value) for key, value in word_re.findall(command)}
+        if upper.startswith(("M104", "M109")) and "S" in words:
+            nozzle.add(round(words["S"]))
+        if upper.startswith(("M140", "M190")) and "S" in words:
+            bed.add(round(words["S"]))
+        if upper.startswith(("G0", "G1", "G2", "G3")):
+            px, py, pe = x, y, e
+            if "X" in words:
+                x = words["X"] if absolute_xyz else x + words["X"]
+            if "Y" in words:
+                y = words["Y"] if absolute_xyz else y + words["Y"]
+            if "Z" in words:
+                z = words["Z"] if absolute_xyz else z + words["Z"]
+            if "E" in words:
+                e = words["E"] if absolute_e else e + words["E"]
+            if "F" in words:
+                feedrate = words["F"]
+            if e - pe > 0:
+                all_feedrates.append(feedrate)
+                if first_z is None:
+                    first_z = z
+                if abs(z - first_z) <= 0.001:
+                    first_layer_feedrates.append(feedrate)
+                    bounds[0] = min(bounds[0], px, x)
+                    bounds[1] = max(bounds[1], px, x)
+                    bounds[2] = min(bounds[2], py, y)
+                    bounds[3] = max(bounds[3], py, y)
+    width = bounds[1] - bounds[0] if math.isfinite(bounds[0]) else 0.0
+    depth = bounds[3] - bounds[2] if math.isfinite(bounds[2]) else 0.0
+    return {
+        "bytes": path.stat().st_size,
+        "width": width,
+        "depth": depth,
+        "nozzle": nozzle,
+        "bed": bed,
+        "types": types,
+        "max_first_layer_feedrate": max(first_layer_feedrates or [0.0]),
+        "max_feedrate": max(all_feedrates or [0.0]),
+    }
+
+metrics = {path.stem: parse(path) for path in root.glob("*.gcode")}
+required = {"baseline", "brim8", "wall4", "infill35", "support_on", "temp_hot", "speed_fast"}
+missing = required - set(metrics)
+if missing:
+    raise SystemExit(f"missing matrix outputs: {sorted(missing)}")
+
+base = metrics["baseline"]
+assert base["bytes"] > 1024, base
+assert metrics["brim8"]["width"] > base["width"] + 5.0, (base, metrics["brim8"])
+assert metrics["brim8"]["depth"] > base["depth"] + 5.0, (base, metrics["brim8"])
+assert metrics["wall4"]["bytes"] > base["bytes"], (base, metrics["wall4"])
+assert metrics["infill35"]["bytes"] != base["bytes"], (base, metrics["infill35"])
+assert any("support" in item.lower() for item in metrics["support_on"]["types"]), metrics["support_on"]
+assert 235 in metrics["temp_hot"]["nozzle"], metrics["temp_hot"]
+assert 70 in metrics["temp_hot"]["bed"], metrics["temp_hot"]
+assert abs(metrics["speed_fast"]["max_feedrate"] - base["max_feedrate"]) > 1000.0, (base, metrics["speed_fast"])
+
+for name in sorted(metrics):
+    item = metrics[name]
+    print(
+        f"{name}: bytes={item['bytes']} firstLayer={item['width']:.2f}x{item['depth']:.2f} "
+        f"maxFirstLayerF={item['max_first_layer_feedrate']:.0f} "
+        f"nozzle={sorted(item['nozzle'])} bed={sorted(item['bed'])} "
+        f"types={','.join(sorted(item['types']))}"
+    )
+PY
+}
+
+run_slice_regression_matrix() {
+  local serial="$1"
+  require_device_automation
+  require_automation_fixture "$DEFAULT_SLICE_SMOKE_STL" "default slice smoke STL"
+  require_automation_fixture "$SUPPORT_SLICE_SMOKE_STL" "support slice smoke STL"
+  install_apk "$serial"
+
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+
+  local baseline_config brim_config wall_config infill_config support_config temp_config speed_config
+  baseline_config="$(automation_config_with_overrides brim_width=0 wall_loops=2 sparse_infill_density=15 enable_support=false first_layer_print_speed=10 first_layer_infill_speed=22.5)"
+  brim_config="$(automation_config_with_overrides brim_width=8 wall_loops=2 sparse_infill_density=15 enable_support=false)"
+  wall_config="$(automation_config_with_overrides brim_width=0 wall_loops=4 sparse_infill_density=15 enable_support=false)"
+  infill_config="$(automation_config_with_overrides brim_width=0 wall_loops=2 sparse_infill_density=35 enable_support=false)"
+  support_config="$(automation_config_with_overrides brim_width=0 enable_support=true support_type=normal\(auto\) support_style=default support_threshold_angle=10 support_on_build_plate_only=false)"
+  temp_config="$(automation_config_with_overrides brim_width=0 nozzle_temperature=235 nozzle_temperature_initial_layer=235 bed_temperature=70 bed_temperature_initial_layer=70)"
+  speed_config="$(automation_config_with_overrides brim_width=0 first_layer_print_speed=25 first_layer_infill_speed=45 sparse_infill_speed=80 print_speed_baseline=80)"
+
+  run_automation_slice "$DEFAULT_SLICE_SMOKE_STL" "$serial" "matrix-baseline" "0" "$baseline_config"
+  pull_app_private_file "$serial" "$AUTOMATION_LAST_OUTPUT_PATH" "$tmp_dir/baseline.gcode"
+  run_automation_slice "$DEFAULT_SLICE_SMOKE_STL" "$serial" "matrix-brim8" "0" "$brim_config"
+  pull_app_private_file "$serial" "$AUTOMATION_LAST_OUTPUT_PATH" "$tmp_dir/brim8.gcode"
+  run_automation_slice "$DEFAULT_SLICE_SMOKE_STL" "$serial" "matrix-wall4" "0" "$wall_config"
+  pull_app_private_file "$serial" "$AUTOMATION_LAST_OUTPUT_PATH" "$tmp_dir/wall4.gcode"
+  run_automation_slice "$DEFAULT_SLICE_SMOKE_STL" "$serial" "matrix-infill35" "0" "$infill_config"
+  pull_app_private_file "$serial" "$AUTOMATION_LAST_OUTPUT_PATH" "$tmp_dir/infill35.gcode"
+  run_automation_slice "$SUPPORT_SLICE_SMOKE_STL" "$serial" "matrix-support" "0" "$support_config"
+  pull_app_private_file "$serial" "$AUTOMATION_LAST_OUTPUT_PATH" "$tmp_dir/support_on.gcode"
+  run_automation_slice "$DEFAULT_SLICE_SMOKE_STL" "$serial" "matrix-temp-hot" "0" "$temp_config"
+  pull_app_private_file "$serial" "$AUTOMATION_LAST_OUTPUT_PATH" "$tmp_dir/temp_hot.gcode"
+  run_automation_slice "$DEFAULT_SLICE_SMOKE_STL" "$serial" "matrix-speed-fast" "0" "$speed_config"
+  pull_app_private_file "$serial" "$AUTOMATION_LAST_OUTPUT_PATH" "$tmp_dir/speed_fast.gcode"
+
+  log "Analyzing pulled G-code regression matrix"
+  analyze_slice_regression_matrix "$tmp_dir"
+  assert_no_crash_after_launch "$serial"
 }
 
 mode="${1:-}"
@@ -349,6 +657,12 @@ case "$mode" in
   stubs)
     run_stub_inventory
     ;;
+  script-tests)
+    run_script_tests
+    ;;
+  asset-tests)
+    run_asset_generator_tests
+    ;;
   apk)
     build_apk
     ;;
@@ -356,7 +670,9 @@ case "$mode" in
     build_release_apk
     ;;
   local)
+    run_script_tests
     run_stub_inventory
+    run_asset_generator_tests
     run_lint
     run_unit
     build_apk
@@ -370,6 +686,9 @@ case "$mode" in
   device-automation)
     run_device_automation_smoke "$(device_serial "${2:-}")"
     ;;
+  slice-regression)
+    run_slice_regression_matrix "$(device_serial "${2:-}")"
+    ;;
   profile-ui)
     run_profile_ui_smoke "$(device_serial "${2:-}")"
     ;;
@@ -381,7 +700,9 @@ case "$mode" in
     run_benchy "$2" "$(device_serial "${3:-}")"
     ;;
   all)
+    run_script_tests
     run_stub_inventory
+    run_asset_generator_tests
     run_lint
     run_unit
     build_release_apk

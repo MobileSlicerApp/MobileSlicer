@@ -24,6 +24,7 @@ __pycache__/
 
 # Local artifact holding areas
 /_quarantine/
+/artifacts/
 /Website/private/
 *.apk
 *.gcode

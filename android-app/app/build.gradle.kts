@@ -13,27 +13,35 @@ val releaseSigningProperties = Properties().apply {
     }
 }
 
-fun releaseSigningValue(propertyName: String, environmentName: String): String? =
+fun projectOrEnvironmentValue(propertyName: String, environmentName: String): String? =
     providers.environmentVariable(environmentName).orNull
         ?: releaseSigningProperties.getProperty(propertyName)
         ?: providers.gradleProperty(propertyName).orNull
 
-val releaseStoreFilePath = releaseSigningValue(
+val releaseStoreFilePath = projectOrEnvironmentValue(
     propertyName = "mobileSlicer.release.storeFile",
     environmentName = "MOBILE_SLICER_RELEASE_STORE_FILE"
 )
-val releaseStorePassword = releaseSigningValue(
+val releaseStorePassword = projectOrEnvironmentValue(
     propertyName = "mobileSlicer.release.storePassword",
     environmentName = "MOBILE_SLICER_RELEASE_STORE_PASSWORD"
 )
-val releaseKeyAlias = releaseSigningValue(
+val releaseKeyAlias = projectOrEnvironmentValue(
     propertyName = "mobileSlicer.release.keyAlias",
     environmentName = "MOBILE_SLICER_RELEASE_KEY_ALIAS"
 )
-val releaseKeyPassword = releaseSigningValue(
+val releaseKeyPassword = projectOrEnvironmentValue(
     propertyName = "mobileSlicer.release.keyPassword",
     environmentName = "MOBILE_SLICER_RELEASE_KEY_PASSWORD"
 )
+val mobileSlicerVersionCode = projectOrEnvironmentValue(
+    propertyName = "mobileSlicer.versionCode",
+    environmentName = "MOBILE_SLICER_VERSION_CODE"
+)?.toIntOrNull()?.takeIf { it > 0 } ?: 1
+val mobileSlicerVersionName = projectOrEnvironmentValue(
+    propertyName = "mobileSlicer.versionName",
+    environmentName = "MOBILE_SLICER_VERSION_NAME"
+)?.takeIf { it.isNotBlank() } ?: "0.1.0"
 val hasReleaseSigningConfig = listOf(
     releaseStoreFilePath,
     releaseStorePassword,
@@ -53,8 +61,8 @@ android {
         applicationId = "com.mobileslicer"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = mobileSlicerVersionCode
+        versionName = mobileSlicerVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

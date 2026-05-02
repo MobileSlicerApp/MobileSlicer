@@ -34,6 +34,34 @@ mobileSlicer.release.keyAlias=...
 mobileSlicer.release.keyPassword=...
 ```
 
+## Release Version Inputs
+
+Default local release metadata is:
+
+```text
+versionName=0.1.0
+versionCode=1
+```
+
+Override it in CI or local release builds with environment variables:
+
+```bash
+export MOBILE_SLICER_VERSION_NAME=0.1.1
+export MOBILE_SLICER_VERSION_CODE=2
+```
+
+Or add matching Gradle properties in the ignored local
+`android-app/release-signing.properties` file:
+
+```properties
+mobileSlicer.versionName=0.1.1
+mobileSlicer.versionCode=2
+```
+
+`versionCode` must be a positive integer. If it is absent or invalid, the build
+falls back to `1`; keep CI responsible for monotonically increasing release
+codes before uploading to a store.
+
 Then build:
 
 ```bash
@@ -52,6 +80,10 @@ an unsigned release artifact.
   `keyAlias`, and `keyPassword`.
 * Do not commit generated `.apk`, `.aab`, `.jks`, `.keystore`, or signing
   property files.
+* Set `MOBILE_SLICER_VERSION_NAME` and `MOBILE_SLICER_VERSION_CODE` explicitly
+  for every release candidate.
 * Before a public release candidate, run `scripts/verify_android.sh local`,
-  build the signed release artifact, install it on a device, and smoke-test
-  model import, workspace rendering, slicing, export/share, and printer upload.
+  `scripts/verify_android.sh release`, and
+  `MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1 scripts/verify_android.sh slice-regression <serial>`,
+  then install the signed artifact on a device and smoke-test model import,
+  workspace rendering, slicing, export/share, and printer upload.
