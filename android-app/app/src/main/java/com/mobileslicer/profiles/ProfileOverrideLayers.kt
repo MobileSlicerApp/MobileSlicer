@@ -15,8 +15,12 @@ internal fun PrinterProfile.withChangedNativePrinterOverridesFrom(initial: Print
 
 internal fun FilamentProfile.withChangedNativeFilamentOverridesFrom(initial: FilamentProfile): FilamentProfile {
     val overrides = changedNativeOverrides(
-        baselineNative = JSONObject().putNativeFilamentConfiguration(initial),
-        updatedNative = JSONObject().putNativeFilamentConfiguration(this),
+        baselineNative = JSONObject()
+            .putNativeFilamentConfiguration(initial)
+            .putNativeFilamentOverrideConfiguration(initial),
+        updatedNative = JSONObject()
+            .putNativeFilamentConfiguration(this)
+            .putNativeFilamentOverrideConfiguration(this),
         resolvedJson = initial.orcaResolvedFilamentJson,
         existingOverridesJson = initial.orcaFilamentOverridesJson
     )

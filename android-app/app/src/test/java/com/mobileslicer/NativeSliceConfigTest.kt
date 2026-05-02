@@ -1106,6 +1106,56 @@ class NativeSliceConfigTest {
     }
 
     @Test
+    fun filamentEditorRetractionEditsOverrideResolvedOrcaValues() {
+        val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(
+            id = "printer_filament_retraction_override",
+            profileSource = "orca",
+            orcaResolvedMachineJson = """{"printer_settings_id":"Orca Printer"}"""
+        )
+        val filament = ProfileStoreRepository.fallbackFilamentProfile().copy(
+            id = "filament_retraction_override",
+            printerProfileId = printer.id,
+            profileSource = "orca",
+            retractionLengthMm = null,
+            orcaResolvedFilamentJson = """
+                {
+                  "filament_settings_id":"Orca PLA",
+                  "filament_retraction_length":0.4,
+                  "filament_wipe":1,
+                  "filament_wipe_distance":1.0
+                }
+            """.trimIndent()
+        )
+        val process = newProcessProfileUnchecked(
+            0 to "process_filament_retraction_override",
+            1 to "0.20mm Orca",
+            259 to printer.id,
+            258 to "orca",
+            265 to """{"print_settings_id":"0.20mm Standard"}"""
+        )
+
+        val edited = FilamentProfileEditorDraft(filament).apply {
+            retractionLength = "0.8"
+        }.toFilamentProfile(filament, isNew = false)
+        val store = ProfileStore(
+            printers = listOf(printer),
+            filaments = listOf(edited),
+            processes = listOf(process),
+            selectedPrinterId = printer.id,
+            selectedFilamentId = edited.id,
+            selectedProcessId = process.id
+        )
+        val overrides = JSONObject(edited.orcaFilamentOverridesJson)
+        val nativeConfig = JSONObject(store.activeConfiguration().toNativeSliceConfigJson())
+
+        assertEquals(0.8, overrides.optDouble("filament_retraction_length"), 0.0001)
+        assertFalse(overrides.has("filament_wipe"))
+        assertEquals(0.8, nativeConfig.optDouble("filament_retraction_length"), 0.0001)
+        assertEquals(1, nativeConfig.optInt("filament_wipe"))
+        assertEquals(1.0, nativeConfig.optDouble("filament_wipe_distance"), 0.0001)
+    }
+
+    @Test
     fun filamentEditorBedPlateTemperatureEditsOverrideResolvedOrcaValues() {
         val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(
             id = "printer_textured_plate",
