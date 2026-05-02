@@ -13,6 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 
 class AutomationConfigResolverTest {
     @Test
@@ -68,6 +69,36 @@ class AutomationConfigResolverTest {
     }
 
     @Test
+    fun automationProcessSpeedOverridesWinOverOrcaResolvedProfileValues() {
+        val resolved = resolver(loadProfileStore = { orcaStoreWithResolvedProcessSpeeds() }).resolve(
+            mapInput(
+                "automation_first_layer_print_speed_mm_per_sec" to 31f,
+                "automation_first_layer_infill_speed_mm_per_sec" to 17f,
+                "automation_first_layer_travel_speed_percent" to 42,
+                "automation_outer_wall_speed_mm_per_sec" to 45f,
+                "automation_inner_wall_speed_mm_per_sec" to 55f,
+                "automation_top_surface_speed_mm_per_sec" to 35f,
+                "automation_travel_speed_mm_per_sec" to 180f,
+                "automation_sparse_infill_speed_mm_per_sec" to 90f,
+                "automation_internal_solid_infill_speed_mm_per_sec" to 80f,
+                "automation_gap_infill_speed_mm_per_sec" to 12f
+            )
+        )
+        val nativeConfig = JSONObject(resolved)
+
+        assertEquals(31.0, nativeConfig.optDouble("initial_layer_speed"), 0.0001)
+        assertEquals(17.0, nativeConfig.optDouble("initial_layer_infill_speed"), 0.0001)
+        assertEquals("42%", nativeConfig.optString("initial_layer_travel_speed"))
+        assertEquals(45.0, nativeConfig.optDouble("outer_wall_speed"), 0.0001)
+        assertEquals(55.0, nativeConfig.optDouble("inner_wall_speed"), 0.0001)
+        assertEquals(35.0, nativeConfig.optDouble("top_surface_speed"), 0.0001)
+        assertEquals(180.0, nativeConfig.optDouble("travel_speed"), 0.0001)
+        assertEquals(90.0, nativeConfig.optDouble("sparse_infill_speed"), 0.0001)
+        assertEquals(80.0, nativeConfig.optDouble("internal_solid_infill_speed"), 0.0001)
+        assertEquals(12.0, nativeConfig.optDouble("gap_infill_speed"), 0.0001)
+    }
+
+    @Test
     fun appliesSupportOverridesToNativeConfig() {
         val store = resolver().resolveProfileStore(
             mapInput(
@@ -97,9 +128,9 @@ class AutomationConfigResolverTest {
         assertFalse(config.process.bridgeNoSupport)
     }
 
-    private fun resolver(): AutomationConfigResolver =
+    private fun resolver(loadProfileStore: () -> ProfileStore = { defaultStore() }): AutomationConfigResolver =
         AutomationConfigResolver(
-            loadProfileStore = { defaultStore() },
+            loadProfileStore = loadProfileStore,
             timestampMillis = { 123L }
         )
 
@@ -126,6 +157,62 @@ class AutomationConfigResolverTest {
             selectedPrinterId = printers.first().id,
             selectedFilamentId = filaments.first().id,
             selectedProcessId = processes.first().id
+        )
+    }
+
+    private fun orcaStoreWithResolvedProcessSpeeds(): ProfileStore {
+        val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(
+            id = "orca_printer_automation",
+            profileSource = "orca",
+            orcaResolvedMachineJson = """{"printer_settings_id":"Orca Printer"}"""
+        )
+        val filament = ProfileStoreRepository.fallbackFilamentProfile().copy(
+            id = "orca_filament_automation",
+            printerProfileId = printer.id,
+            profileSource = "orca",
+            orcaResolvedFilamentJson = """{"filament_settings_id":"Orca PLA"}"""
+        )
+        val process = newProcessProfileUnchecked(
+            0 to "orca_process_automation",
+            1 to "Orca Process",
+            3 to false,
+            5 to 0.20f,
+            6 to 100f,
+            7 to 100f,
+            8 to 100,
+            15 to 100f,
+            16 to 100f,
+            17 to 100f,
+            18 to 100f,
+            67 to 100f,
+            68 to 100f,
+            69 to 100f,
+            258 to "orca",
+            259 to printer.id,
+            261 to printer.nozzleDiameterMm,
+            265 to """
+                {
+                  "print_settings_id":"Orca Process",
+                  "initial_layer_speed":100,
+                  "initial_layer_infill_speed":100,
+                  "initial_layer_travel_speed":"100%",
+                  "outer_wall_speed":100,
+                  "inner_wall_speed":100,
+                  "top_surface_speed":100,
+                  "travel_speed":100,
+                  "sparse_infill_speed":100,
+                  "internal_solid_infill_speed":100,
+                  "gap_infill_speed":100
+                }
+            """.trimIndent()
+        )
+        return ProfileStore(
+            printers = listOf(printer),
+            filaments = listOf(filament),
+            processes = listOf(process),
+            selectedPrinterId = printer.id,
+            selectedFilamentId = filament.id,
+            selectedProcessId = process.id
         )
     }
 

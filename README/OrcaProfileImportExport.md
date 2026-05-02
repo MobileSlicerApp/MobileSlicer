@@ -543,7 +543,7 @@ Recommended behavior:
 
 Map current supported fields from the resolved Orca preset to:
 
-* `first_layer_height`
+* `initial_layer_print_height` or `first_layer_height`
 * `layer_height`
 * `initial_layer_speed` or `first_layer_print_speed`
 * `initial_layer_infill_speed`
@@ -572,7 +572,7 @@ Map current supported fields from the resolved Orca preset to:
 * `wall_loops`
 * `sparse_infill_density`
 * `sparse_infill_pattern`
-* `skirts` or `skirt_loops`
+* `skirt_loops` or `skirts`
 * `brim_width`
 
 ### Percent and Enum Normalization
@@ -842,7 +842,7 @@ From native filament profile:
 
 From native process profile:
 
-* `firstLayerHeightMm` -> `first_layer_height`
+* `firstLayerHeightMm` -> `initial_layer_print_height` (also keeps `first_layer_height` in sync for compatibility)
 * `layerHeightMm` -> `layer_height`
 * `firstLayerPrintSpeedMmPerSec` -> `initial_layer_speed`
 * `firstLayerInfillSpeedMmPerSec` -> `initial_layer_infill_speed`
@@ -871,7 +871,7 @@ From native process profile:
 * `wallCount` -> `wall_loops`
 * `infillPercent` -> `sparse_infill_density`
 * `sparseInfillPattern` -> `sparse_infill_pattern`
-* `skirts` -> `skirt_loops`
+* `skirts` -> `skirt_loops` (also keeps `skirts` in sync for compatibility)
 * `brimWidthMm` -> `brim_width`
 
 ## 6. Export Validation

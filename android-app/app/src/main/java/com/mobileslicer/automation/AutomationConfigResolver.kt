@@ -31,6 +31,7 @@ import com.mobileslicer.profiles.derivedSparseInfillSpeedMmPerSec
 import com.mobileslicer.profiles.derivedTopSurfaceSpeedMmPerSec
 import com.mobileslicer.profiles.derivedTravelSpeedMmPerSec
 import com.mobileslicer.profiles.toNativeSliceConfigJson
+import com.mobileslicer.profiles.withChangedNativeProcessOverridesFrom
 import org.json.JSONObject
 
 private const val EXTRA_AUTOMATION_CONFIG_JSON = "automation_config_json"
@@ -556,19 +557,39 @@ internal class AutomationConfigResolver(
             "supportThresholdAngleDegrees" to if (supportThresholdAngle == Int.MIN_VALUE) active.supportThresholdAngleDegrees else supportThresholdAngle,
             "supportBuildplateOnly" to if (hasSupportBuildplateOnlyOverride) supportBuildplateOnly else active.supportBuildplateOnly,
             "orcaResolvedProcessJson" to active.orcaResolvedProcessJson.withJsonOverrides(
+                "initial_layer_print_height" to active.firstLayerHeightMm,
                 "layer_height" to if (layerHeightMm.isNaN()) active.layerHeightMm else layerHeightMm,
+                "initial_layer_speed" to if (firstLayerPrintSpeedMmPerSec.isNaN()) active.firstLayerPrintSpeedMmPerSec else firstLayerPrintSpeedMmPerSec,
+                "initial_layer_infill_speed" to if (firstLayerInfillSpeedMmPerSec.isNaN()) active.firstLayerInfillSpeedMmPerSec else firstLayerInfillSpeedMmPerSec,
+                "initial_layer_travel_speed" to "${if (firstLayerTravelSpeedPercent == Int.MIN_VALUE) active.firstLayerTravelSpeedPercent else firstLayerTravelSpeedPercent}%",
+                "outer_wall_speed" to if (outerWallSpeedMmPerSec.isNaN()) active.outerWallSpeedMmPerSec else outerWallSpeedMmPerSec,
+                "inner_wall_speed" to if (innerWallSpeedMmPerSec.isNaN()) active.innerWallSpeedMmPerSec else innerWallSpeedMmPerSec,
+                "top_surface_speed" to if (topSurfaceSpeedMmPerSec.isNaN()) active.topSurfaceSpeedMmPerSec else topSurfaceSpeedMmPerSec,
+                "travel_speed" to if (travelSpeedMmPerSec.isNaN()) active.travelSpeedMmPerSec else travelSpeedMmPerSec,
+                "outer_wall_acceleration" to if (outerWallAccelerationMmPerSec2.isNaN()) active.outerWallAccelerationMmPerSec2 else outerWallAccelerationMmPerSec2,
+                "inner_wall_acceleration" to if (innerWallAccelerationMmPerSec2.isNaN()) active.innerWallAccelerationMmPerSec2 else innerWallAccelerationMmPerSec2,
+                "top_surface_acceleration" to if (topSurfaceAccelerationMmPerSec2.isNaN()) active.topSurfaceAccelerationMmPerSec2 else topSurfaceAccelerationMmPerSec2,
+                "sparse_infill_acceleration" to if (sparseInfillAccelerationMmPerSec2.isNaN()) active.sparseInfillAccelerationMmPerSec2 else sparseInfillAccelerationMmPerSec2,
                 "wall_loops" to if (wallCount == Int.MIN_VALUE) active.wallCount else wallCount,
                 "sparse_infill_density" to if (infillPercent == Int.MIN_VALUE) active.infillPercent else "$infillPercent%",
                 "sparse_infill_pattern" to (sparseInfillPattern ?: active.sparseInfillPattern.configValue),
                 "bridge_speed" to if (bridgeSpeedMmPerSec.isNaN()) active.bridgeSpeedMmPerSec else bridgeSpeedMmPerSec,
                 "bridge_no_support" to if (hasBridgeNoSupportOverride) bridgeNoSupport else active.bridgeNoSupport,
+                "small_perimeter_speed" to if (smallPerimeterSpeedMmPerSec.isNaN()) active.smallPerimeterSpeedMmPerSec else smallPerimeterSpeedMmPerSec,
+                "small_perimeter_threshold" to if (smallPerimeterThresholdMm.isNaN()) active.smallPerimeterThresholdMm else smallPerimeterThresholdMm,
+                "sparse_infill_speed" to if (sparseInfillSpeedMmPerSec.isNaN()) active.sparseInfillSpeedMmPerSec else sparseInfillSpeedMmPerSec,
+                "internal_solid_infill_speed" to if (internalSolidInfillSpeedMmPerSec.isNaN()) active.internalSolidInfillSpeedMmPerSec else internalSolidInfillSpeedMmPerSec,
+                "gap_infill_speed" to if (gapInfillSpeedMmPerSec.isNaN()) active.gapInfillSpeedMmPerSec else gapInfillSpeedMmPerSec,
+                "top_shell_layers" to if (topShellLayers == Int.MIN_VALUE) active.topShellLayers else topShellLayers,
+                "bottom_shell_layers" to if (bottomShellLayers == Int.MIN_VALUE) active.bottomShellLayers else bottomShellLayers,
                 "enable_support" to if (hasEnableSupportOverride) enableSupport else active.enableSupport,
                 "support_type" to (supportType ?: active.supportType.configValue),
                 "support_style" to (supportStyle ?: active.supportStyle.configValue),
                 "support_threshold_angle" to if (supportThresholdAngle == Int.MIN_VALUE) active.supportThresholdAngleDegrees else supportThresholdAngle,
-                "support_on_build_plate_only" to if (hasSupportBuildplateOnlyOverride) supportBuildplateOnly else active.supportBuildplateOnly
+                "support_on_build_plate_only" to if (hasSupportBuildplateOnlyOverride) supportBuildplateOnly else active.supportBuildplateOnly,
+                "skirt_loops" to active.skirts
             )
-        )
+        ).withChangedNativeProcessOverridesFrom(active)
 
         updatedStore = updatedStore.copy(
             processes = updatedStore.processes.filterNot { it.id == duplicated.id } + duplicated,

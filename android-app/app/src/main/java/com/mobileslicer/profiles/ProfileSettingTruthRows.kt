@@ -106,7 +106,7 @@ internal fun processSettingTruthRows(): List<SettingTruthRow> = listOf(
     SettingTruthRow(
         label = "First layer height",
         status = "Device-proven",
-        detail = "The Android Process editor now exposes the already-supported first_layer_height path as its own Quality control."
+        detail = "The Android Process editor exposes first-layer height as Orca initial_layer_print_height, with first_layer_height kept in sync for compatibility."
     ),
     SettingTruthRow(
         label = "First layer print speed",

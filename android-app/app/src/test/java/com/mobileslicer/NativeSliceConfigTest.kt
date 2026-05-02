@@ -4,6 +4,7 @@ import com.mobileslicer.profiles.ProfileStore
 import com.mobileslicer.profiles.ProfileStoreRepository
 import com.mobileslicer.profiles.OrcaFilamentImportBundle
 import com.mobileslicer.profiles.OrcaFilamentPreset
+import com.mobileslicer.profiles.OrcaProcessPresetBundle
 import com.mobileslicer.profiles.FilamentProfileEditorDraft
 import com.mobileslicer.profiles.NativeSliceConfigCache
 import com.mobileslicer.profiles.PrinterProfileEditorDraft
@@ -13,6 +14,7 @@ import com.mobileslicer.profiles.toNativeSliceConfigBuildResult
 import com.mobileslicer.profiles.newProcessProfileUnchecked
 import com.mobileslicer.profiles.orcaFilamentIdentityMatchesPreset
 import com.mobileslicer.profiles.toImportedFilamentProfile
+import com.mobileslicer.profiles.toImportedProcessProfile
 import com.mobileslicer.profiles.toFilamentProfile
 import com.mobileslicer.profiles.toNativeSliceConfigJson
 import com.mobileslicer.profiles.toPrinterProfile
@@ -28,6 +30,96 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NativeSliceConfigTest {
+    @Test
+    fun nativeProcessSpeedControlsEmitCanonicalOrcaSpeedKeys() {
+        val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(id = "printer_speed_keys")
+        val filament = ProfileStoreRepository.fallbackFilamentProfile().copy(
+            id = "filament_speed_keys",
+            printerProfileId = printer.id
+        )
+        val process = newProcessProfileUnchecked(
+            0 to "process_speed_keys",
+            1 to "Speed Keys",
+            4 to 0.24f,
+            6 to 24f,
+            7 to 18f,
+            8 to 65,
+            15 to 44f,
+            16 to 55f,
+            17 to 33f,
+            18 to 160f,
+            48 to 22f,
+            49 to 0f,
+            67 to 88f,
+            68 to 77f,
+            69 to 11f,
+            259 to printer.id
+        )
+
+        val nativeConfig = JSONObject(nativeConfigFor(printer, filament, process))
+
+        assertEquals(0.24, nativeConfig.optDouble("initial_layer_print_height"), 0.0001)
+        assertEquals(24.0, nativeConfig.optDouble("initial_layer_speed"), 0.0001)
+        assertEquals(18.0, nativeConfig.optDouble("initial_layer_infill_speed"), 0.0001)
+        assertEquals("65%", nativeConfig.optString("initial_layer_travel_speed"))
+        assertEquals(44.0, nativeConfig.optDouble("outer_wall_speed"), 0.0001)
+        assertEquals(55.0, nativeConfig.optDouble("inner_wall_speed"), 0.0001)
+        assertEquals(33.0, nativeConfig.optDouble("top_surface_speed"), 0.0001)
+        assertEquals(160.0, nativeConfig.optDouble("travel_speed"), 0.0001)
+        assertEquals(22.0, nativeConfig.optDouble("bridge_speed"), 0.0001)
+        assertEquals(0.0, nativeConfig.optDouble("small_perimeter_speed"), 0.0001)
+        assertEquals(88.0, nativeConfig.optDouble("sparse_infill_speed"), 0.0001)
+        assertEquals(77.0, nativeConfig.optDouble("internal_solid_infill_speed"), 0.0001)
+        assertEquals(11.0, nativeConfig.optDouble("gap_infill_speed"), 0.0001)
+    }
+
+    @Test
+    fun importedOrcaProcessReadsCanonicalInitialLayerSpeedKeys() {
+        val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(
+            id = "printer_import_speed_keys",
+            nozzleDiameterMm = 0.4f
+        )
+        val imported = OrcaProcessPresetBundle(
+            machineName = "Fixture 0.4",
+            nozzleDiameterMm = 0.4f,
+            name = "0.20mm Speed Fixture",
+            rawName = "0.20mm Speed Fixture",
+            profilePath = "Fixture/process/0.20mm Speed Fixture.json",
+            rawProcessJson = "{}",
+            resolvedProcessJson = """
+                {
+                  "print_settings_id":"0.20mm Speed Fixture",
+                  "initial_layer_print_height":["0.28"],
+                  "initial_layer_speed":["31"],
+                  "initial_layer_infill_speed":["17"],
+                  "initial_layer_travel_speed":"42%",
+                  "outer_wall_speed":45,
+                  "inner_wall_speed":55,
+                  "top_surface_speed":35,
+                  "travel_speed":180,
+                  "sparse_infill_speed":90,
+                  "internal_solid_infill_speed":80,
+                  "gap_infill_speed":12,
+                  "skirt_loops":4
+                }
+            """.trimIndent(),
+            resolvedSourceChain = emptyList()
+        ).toImportedProcessProfile(printer)
+
+        assertEquals(0.28f, imported.firstLayerHeightMm, 0.0001f)
+        assertEquals(31f, imported.firstLayerPrintSpeedMmPerSec, 0.0001f)
+        assertEquals(17f, imported.firstLayerInfillSpeedMmPerSec, 0.0001f)
+        assertEquals(42, imported.firstLayerTravelSpeedPercent)
+        assertEquals(45f, imported.outerWallSpeedMmPerSec, 0.0001f)
+        assertEquals(55f, imported.innerWallSpeedMmPerSec, 0.0001f)
+        assertEquals(35f, imported.topSurfaceSpeedMmPerSec, 0.0001f)
+        assertEquals(180f, imported.travelSpeedMmPerSec, 0.0001f)
+        assertEquals(90f, imported.sparseInfillSpeedMmPerSec, 0.0001f)
+        assertEquals(80f, imported.internalSolidInfillSpeedMmPerSec, 0.0001f)
+        assertEquals(12f, imported.gapInfillSpeedMmPerSec, 0.0001f)
+        assertEquals(4, imported.skirts)
+    }
+
     @Test
     fun nativeSliceConfigBuildCacheHitsButInvalidatesOnChangedProcessOverride() {
         NativeSliceConfigCache.clear()
@@ -150,6 +242,7 @@ class NativeSliceConfigTest {
         assertEquals(4, nativeConfig.optInt("wall_loops"))
         assertEquals(35, nativeConfig.optInt("sparse_infill_density"))
         assertTrue(nativeConfig.optBoolean("enable_support", false))
+        assertEquals(3, nativeConfig.optInt("skirt_loops"))
         assertEquals(3, nativeConfig.optInt("skirts"))
         assertEquals("outer_only", nativeConfig.optString("brim_type"))
         assertEquals(6.0, nativeConfig.optDouble("brim_width"), 0.0001)

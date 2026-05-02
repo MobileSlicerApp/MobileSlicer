@@ -5,7 +5,11 @@ import org.json.JSONObject
 
 internal fun JSONObject.putNativeProcessConfiguration(process: ProcessProfile): JSONObject = apply {
     put("layer_height", process.layerHeightMm.toDouble())
+            .put("initial_layer_print_height", process.firstLayerHeightMm.toDouble())
             .put("first_layer_height", process.firstLayerHeightMm.toDouble())
+            .put("initial_layer_speed", process.firstLayerPrintSpeedMmPerSec.toDouble())
+            .put("initial_layer_infill_speed", process.firstLayerInfillSpeedMmPerSec.toDouble())
+            .put("initial_layer_travel_speed", "${process.firstLayerTravelSpeedPercent}%")
             .put("first_layer_print_speed", process.firstLayerPrintSpeedMmPerSec.toDouble())
             .put("first_layer_infill_speed", process.firstLayerInfillSpeedMmPerSec.toDouble())
             .put("initial_layer_travel_speed_percent", process.firstLayerTravelSpeedPercent)
@@ -278,6 +282,7 @@ internal fun JSONObject.putNativeProcessConfiguration(process: ProcessProfile): 
             .put(NativeConfigKeys.PrimeTower.FlushIntoSupport, process.flushIntoSupport)
             .put("wall_loops", process.wallCount)
             .put("skirt_type", process.skirtType.configValue)
+            .put("skirt_loops", process.skirts)
             .put("skirts", process.skirts)
             .put("min_skirt_length", process.minSkirtLengthMm.toDouble())
             .put("skirt_distance", process.skirtDistanceMm.toDouble())

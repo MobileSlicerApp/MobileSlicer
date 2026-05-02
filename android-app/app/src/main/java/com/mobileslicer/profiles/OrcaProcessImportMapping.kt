@@ -17,11 +17,23 @@ internal fun OrcaProcessPresetBundle.toImportedProcessProfile(printer: PrinterPr
         1 to name,
         2 to "",
         3 to false,
-        4 to resolved.processConfigFloat("first_layer_height", resolved.processConfigFloat("layer_height", 0.2f)),
+        4 to resolved.processConfigFloatAny(
+            listOf("initial_layer_print_height", "first_layer_height"),
+            resolved.processConfigFloat("layer_height", 0.2f)
+        ),
         5 to resolved.processConfigFloat("layer_height", 0.2f),
-        6 to resolved.processConfigFloat("first_layer_print_speed", derivedFirstLayerPrintSpeedMmPerSec(printSpeed)),
-        7 to resolved.processConfigFloat("first_layer_infill_speed", derivedFirstLayerInfillSpeedMmPerSec(printSpeed)),
-        8 to resolved.processConfigInt("initial_layer_travel_speed_percent", DEFAULT_FIRST_LAYER_TRAVEL_SPEED_PERCENT),
+        6 to resolved.processConfigFloatAny(
+            listOf("initial_layer_speed", "first_layer_print_speed"),
+            derivedFirstLayerPrintSpeedMmPerSec(printSpeed)
+        ),
+        7 to resolved.processConfigFloatAny(
+            listOf("initial_layer_infill_speed", "first_layer_infill_speed"),
+            derivedFirstLayerInfillSpeedMmPerSec(printSpeed)
+        ),
+        8 to resolved.processConfigPercentIntAny(
+            listOf("initial_layer_travel_speed", "initial_layer_travel_speed_percent"),
+            DEFAULT_FIRST_LAYER_TRAVEL_SPEED_PERCENT
+        ),
         9 to resolved.processConfigInt("slow_down_layers", DEFAULT_SLOW_DOWN_LAYERS),
         10 to resolved.processConfigFloat("initial_layer_acceleration", DEFAULT_INITIAL_LAYER_ACCELERATION_MM_PER_SEC2),
         11 to resolved.processConfigFloat("initial_layer_jerk", DEFAULT_INITIAL_LAYER_JERK_MM_PER_SEC),
@@ -117,7 +129,7 @@ internal fun OrcaProcessPresetBundle.toImportedProcessProfile(printer: PrinterPr
         189 to resolved.processConfigFloat("prime_tower_width", DEFAULT_PRIME_TOWER_WIDTH_MM),
         194 to resolved.processConfigInt("standby_temperature_delta", DEFAULT_STANDBY_TEMPERATURE_DELTA_C),
         195 to resolved.processConfigBoolean("wipe_tower_no_sparse_layers", DEFAULT_WIPE_TOWER_NO_SPARSE_LAYERS),
-        199 to resolved.processConfigInt("skirts", 2),
+        199 to resolved.processConfigIntAny(listOf("skirt_loops", "skirts"), 2),
         200 to resolved.processConfigFloat("brim_width", 0f),
         269 to ProcessGcodeOutputDetails(
             gcodeLabelObjects = resolved.processConfigBoolean("gcode_label_objects", false),
@@ -149,11 +161,36 @@ private fun JSONObject.processConfigFloat(key: String, defaultValue: Float): Flo
     return value.toString().trim().toFloatOrNull() ?: defaultValue
 }
 
+private fun JSONObject.processConfigFloatAny(keys: List<String>, defaultValue: Float): Float {
+    keys.forEach { key ->
+        val value = processConfigScalar(key) ?: return@forEach
+        value.toString().trim().trimEnd('%').toFloatOrNull()?.let { return it }
+    }
+    return defaultValue
+}
+
 private fun JSONObject.processConfigInt(key: String, defaultValue: Int): Int {
     val value = processConfigScalar(key) ?: return defaultValue
     return value.toString().trim().toIntOrNull()
         ?: value.toString().trim().toFloatOrNull()?.toInt()
         ?: defaultValue
+}
+
+private fun JSONObject.processConfigIntAny(keys: List<String>, defaultValue: Int): Int {
+    keys.forEach { key ->
+        val value = processConfigScalar(key) ?: return@forEach
+        value.toString().trim().toIntOrNull()?.let { return it }
+        value.toString().trim().toFloatOrNull()?.toInt()?.let { return it }
+    }
+    return defaultValue
+}
+
+private fun JSONObject.processConfigPercentIntAny(keys: List<String>, defaultValue: Int): Int {
+    keys.forEach { key ->
+        val value = processConfigScalar(key) ?: return@forEach
+        value.toString().trim().trimEnd('%').toFloatOrNull()?.toInt()?.let { return it }
+    }
+    return defaultValue
 }
 
 private fun JSONObject.processConfigBoolean(key: String, defaultValue: Boolean): Boolean {
