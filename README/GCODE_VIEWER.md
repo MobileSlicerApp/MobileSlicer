@@ -128,14 +128,21 @@ Accepted camera behavior:
   distance term that flattens zoom response
 * small pinch scale changes are applied instead of being dropped by a zoom
   deadband
-* the zoom ceiling is intentionally wide enough for close toolpath inspection
-* two-finger pan remains active during two-finger gestures; pinch zoom and
-  centroid pan are allowed to work together
+* the zoom range is intentionally wide enough for both zoomed-out plate context
+  and close toolpath inspection; current camera bounds are `0.28x..24x`
+* the default and reset camera uses a front-on bed view: yaw `-90`, pitch `42`,
+  zoom `0.55x`
+* one-finger drag orbits the camera
+* two-finger gestures use a dead zone and then lock to either centroid pan or
+  pinch zoom for the rest of that gesture; pan and zoom are not applied
+  together after the lock
+* two-finger double-tap resets camera orbit, pan, and zoom without changing
+  model transforms or plate-object state
 * camera zoom never changes G-code Preview LOD, reloads native preview buffers,
   or mutates extrusion dimensions
 
-This avoids the previously observed on-device "transition" where zoom appeared
-to lock briefly while pinching in/out.
+This avoids the previously observed pan/zoom clash where normal finger drift
+during pinch also moved the camera target.
 
 ### Preview Layer Controls
 

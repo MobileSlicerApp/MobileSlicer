@@ -16,6 +16,7 @@ import com.mobileslicer.profiles.ProfileEditorOrcaUiOrder
 import com.mobileslicer.profiles.ProfileSettingVisibility
 import com.mobileslicer.profiles.ProfileStore
 import com.mobileslicer.profiles.ProfileStoreRepository
+import com.mobileslicer.profiles.PrintHostType
 import com.mobileslicer.profiles.ProcessIroningType
 import com.mobileslicer.profiles.ProcessGcodeOutputDetails
 import com.mobileslicer.profiles.ProcessPrimeTowerDetails
@@ -52,7 +53,9 @@ import com.mobileslicer.profiles.filteredOrcaFilamentPickerRows
 import com.mobileslicer.profiles.isReplaceableOrcaGenericMaterialFor
 import com.mobileslicer.profiles.orcaFilamentCompatibleKeysCache
 import com.mobileslicer.profiles.resolveOrcaFilamentPresetForImport
+import com.mobileslicer.profiles.toJson
 import com.mobileslicer.profiles.toImportedPrinterProfile
+import com.mobileslicer.profiles.toPrinterProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -203,6 +206,58 @@ class ProfileModelsTest {
         assertEquals("10,10", printer.bedMeshMin)
         assertEquals("290,260", printer.bedMeshMax)
         assertEquals("50,50", printer.bedMeshProbeDistance)
+    }
+
+    @Test
+    fun importedBambuPrinterDefaultsToBambuLanConnection() {
+        val preset = OrcaPrinterPreset(
+            name = "Bambu Lab P1S",
+            family = "BBL",
+            searchText = "Bambu Lab P1S",
+            nozzleDiameters = "0.4",
+            profilePath = "BBL/machine/Bambu Lab P1S.json",
+            coverAssetPath = "",
+            importBundleAssetPath = "",
+            bedModelAssetPath = "",
+            bedTextureAssetPath = "",
+            bedWidthMm = 256f,
+            bedDepthMm = 256f,
+            maxHeightMm = 256f,
+            activeNozzleDiameterMm = 0.4f,
+            nozzleMachinePaths = emptyList(),
+            resolvedSourceChains = emptyList()
+        )
+        val bundle = OrcaPrinterImportBundle(
+            machineModelJson = """{"name":"Bambu Lab P1S","default_bed_type":"Textured PEI Plate"}""",
+            resolvedMachineJson = """{"name":"Bambu Lab P1S 0.4 nozzle","printer_model":"Bambu Lab P1S","nozzle_diameter":"0.4"}""",
+            nozzleMachineJsons = emptyList(),
+            resolvedMachineJsons = emptyList(),
+            processPresets = emptyList()
+        )
+
+        val printer = preset.toImportedPrinterProfile(bundle, selectedNozzleDiameterMm = 0.4f)
+
+        assertEquals(PrintHostType.BambuLan, printer.printHostType)
+        assertEquals("Textured PEI Plate", printer.bambuBedType)
+    }
+
+    @Test
+    fun savedLegacyBambuPrinterWithGenericDefaultMigratesToBambuLanConnection() {
+        val stored = ProfileStoreRepository.fallbackPrinterProfile().copy(
+            name = "Bambu Lab P2S 0.4 nozzle",
+            printerModel = "Bambu Lab P2S",
+            orcaFamily = "BBL",
+            printHostType = PrintHostType.OctoPrint,
+            printHost = "",
+            printHostApiKey = "",
+            printHostPort = ""
+        ).toJson().apply {
+            remove("printHostType")
+        }
+
+        val printer = stored.toPrinterProfile()
+
+        assertEquals(PrintHostType.BambuLan, printer.printHostType)
     }
 
     @Test

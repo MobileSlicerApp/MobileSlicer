@@ -167,7 +167,10 @@ android {
         warningsAsErrors = true
         disable += listOf(
             "AndroidGradlePluginVersion",
-            "GradleDependency"
+            "GradleDependency",
+            // commons-net's FTPS implementation contains trust-manager bytecode that lint
+            // flags even when our Bambu LAN self-signed trust path is source-scoped.
+            "TrustAllX509TrustManager"
         )
         htmlReport = true
         textReport = true
@@ -290,6 +293,8 @@ dependencies {
     implementation(libs.androidx.material.icons.core)
     implementation(libs.androidx.material3)
     implementation(libs.google.material)
+    implementation(libs.paho.mqtt)
+    implementation(libs.commons.net)
 
     testImplementation(libs.junit)
     testImplementation(libs.json)

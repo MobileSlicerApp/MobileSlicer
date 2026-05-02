@@ -147,6 +147,7 @@ if (ORCA_SHIPPING_REAL_WRAPPER)
         $<$<COMPILE_LANGUAGE:CXX>:-fomit-frame-pointer>
         $<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_CURRENT_LIST_DIR}/../../../../../engine-wrapper/orca-android-libslic3r/shims/orca_android_libslic3r_model_preinclude.hpp>
     )
+    target_link_options(orca_engine PRIVATE -Wl,--gc-sections)
     if (MOBILE_SLICER_SUPPRESS_VENDOR_WARNING_NOISE)
         target_compile_options(orca_engine PRIVATE
             $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-declarations>

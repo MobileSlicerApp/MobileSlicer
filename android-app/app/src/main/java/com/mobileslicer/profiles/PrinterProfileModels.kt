@@ -160,6 +160,14 @@ internal data class PrinterProfile(
     val printHostUser: String = "",
     val printHostPassword: String = "",
     val printHostSslIgnoreRevoke: Boolean = false,
+    val bambuBedType: String = "",
+    val bambuUseAms: Boolean = false,
+    val bambuAmsMapping: String = "",
+    val bambuNozzleMapping: String = "",
+    val bambuBedLeveling: Boolean = true,
+    val bambuFlowCalibration: Boolean = false,
+    val bambuVibrationCalibration: Boolean = false,
+    val bambuTimelapse: Boolean = false,
     val timeCost: Float = 0f,
     val fanSpeedupTimeSeconds: Float = 0f,
     val fanSpeedupOverhangsOnly: Boolean = true,
@@ -291,6 +299,20 @@ internal data class PrinterProfile(
         bedTextureAssetPath = resolvedBedTextureAssetPath,
         bedTextureIncludesGrid = resolvedBedTextureIncludesGrid
     )
+}
+
+internal fun PrinterProfile.withBambuDefaultConnectionType(hasExplicitPrintHostType: Boolean): PrinterProfile {
+    if (!hasBambuContext() || printHostType == PrintHostType.BambuLan) return this
+    val legacyGenericDefault =
+        printHostType == PrintHostType.OctoPrint &&
+            printHost.isBlank() &&
+            printHostApiKey.isBlank() &&
+            printHostPort.isBlank()
+    return if (!hasExplicitPrintHostType || legacyGenericDefault) {
+        copy(printHostType = PrintHostType.BambuLan)
+    } else {
+        this
+    }
 }
 
 private fun PrinterProfile.nativeBedOrigin(): Pair<Float, Float> {

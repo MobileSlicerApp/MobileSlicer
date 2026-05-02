@@ -13,3 +13,16 @@ internal fun formatBytes(bytes: Long): String =
         bytes >= 1_024L -> "${bytes / 1_024L} KB"
         else -> "$bytes bytes"
     }
+
+internal fun String.toBambuPackageFileName(): String {
+    val cleaned = trim()
+        .replace(Regex("""[\\/:*?"<>|]+"""), "_")
+        .replace(Regex("""\s+"""), " ")
+        .ifBlank { "mobile_slicer_output.gcode.3mf" }
+    return when {
+        cleaned.endsWith(".gcode.3mf", ignoreCase = true) -> cleaned
+        cleaned.endsWith(".3mf", ignoreCase = true) -> cleaned.substringBeforeLast(".3mf") + ".gcode.3mf"
+        cleaned.endsWith(".gcode", ignoreCase = true) -> cleaned.substringBeforeLast(".gcode") + ".gcode.3mf"
+        else -> "$cleaned.gcode.3mf"
+    }
+}

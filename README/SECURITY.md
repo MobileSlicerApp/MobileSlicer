@@ -205,9 +205,10 @@ Remaining required hardening:
   usernames, and passwords by default and marks the export payload with
   `includesPrinterSecrets=false`. A future "include secrets" export mode would
   need a separate explicit user action.
-* Bambu LAN is currently limited to saved setup and reachability checks. Direct
-  upload/start remains disabled until the secure MQTT plus FTP/FTPS sequence can
-  be validated on hardware.
+* Bambu LAN direct upload/start is implemented through secure local MQTT plus
+  FTPS and requires a native Orca BBS `.gcode.3mf` export before sending.
+  Hardware validation is still required before treating every Bambu firmware
+  variant and print-task option as proven.
 * upload progress and cancel UI are implemented for active sends, and failed
   uploads now keep the last send request available for a one-tap retry.
   More granular timeout/auth/TLS messaging is still needed.

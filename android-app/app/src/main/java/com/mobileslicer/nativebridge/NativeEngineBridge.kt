@@ -24,6 +24,7 @@ class NativeEngineBridge private constructor() {
         @JvmStatic external fun nativeGetSliceMetrics(handle: Long): String?
         @JvmStatic external fun nativePlanLatestSlicePreviewRanges(handle: Long, minLayer: Long, maxLayer: Long, vertexBudget: Long): String?
         @JvmStatic external fun nativeWriteGcodeToFile(handle: Long, path: String): Boolean
+        @JvmStatic external fun nativeWriteBambuGcode3mfToFile(handle: Long, path: String): Boolean
         @JvmStatic external fun nativeGetLastError(handle: Long): String?
         internal fun nativeGetLastEngineError(handle: Long): NativeEngineError? =
             parseNativeEngineError(nativeGetLastError(handle))

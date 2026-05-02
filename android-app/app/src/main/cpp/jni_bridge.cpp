@@ -552,6 +552,23 @@ Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeWriteGcodeToFile(JNI
     return jni_bool_from_result(result);
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeWriteBambuGcode3mfToFile(JNIEnv* env, jclass, jlong handle, jstring path)
+{
+    if (handle == 0 || path == nullptr) {
+        return JNI_FALSE;
+    }
+
+    JniUtfString raw_path(env, path);
+    if (!raw_path.ok()) {
+        return JNI_FALSE;
+    }
+
+    const int result = orca_write_bambu_gcode_3mf_to_file(engine_from_handle(handle), raw_path.get());
+    trim_native_heap();
+    return jni_bool_from_result(result);
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeGetLastError(JNIEnv* env, jclass, jlong handle)
 {

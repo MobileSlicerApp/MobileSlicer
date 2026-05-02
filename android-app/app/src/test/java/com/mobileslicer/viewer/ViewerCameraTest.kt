@@ -31,4 +31,30 @@ class ViewerCameraTest {
 
         assertEquals(initialDistance / 1.005f, camera.cameraDistanceForTesting(), 0.001f)
     }
+
+    @Test
+    fun resetViewRestoresDefaultZoomAndClearsPan() {
+        val camera = ViewerCamera(PrinterBedSpec(widthMm = 270f, depthMm = 270f, maxHeightMm = 256f))
+        camera.zoomBy(2f)
+        camera.panBy(20f, 30f, 1000)
+
+        camera.resetView()
+        val state = camera.snapshotState()
+
+        assertEquals(0.55f, state.zoom, 0.0001f)
+        assertEquals(0f, state.panX, 0.0001f)
+        assertEquals(0f, state.panY, 0.0001f)
+    }
+
+    @Test
+    fun zoomAllowsWiderRangeForInspection() {
+        val camera = ViewerCamera(PrinterBedSpec(widthMm = 270f, depthMm = 270f, maxHeightMm = 256f))
+        camera.zoomBy(100f)
+
+        assertEquals(24f, camera.snapshotState().zoom, 0.0001f)
+
+        camera.zoomBy(0.001f)
+
+        assertEquals(0.28f, camera.snapshotState().zoom, 0.0001f)
+    }
 }

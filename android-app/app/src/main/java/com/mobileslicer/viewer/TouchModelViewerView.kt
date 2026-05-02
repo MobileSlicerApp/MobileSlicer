@@ -14,7 +14,6 @@ import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.PixelCopy
-import android.view.ScaleGestureDetector
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -26,6 +25,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 
 internal class TouchModelViewerView @JvmOverloads constructor(
@@ -33,15 +33,6 @@ internal class TouchModelViewerView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : SurfaceView(context, attrs), SurfaceHolder.Callback {
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
-    private val scaleDetector = ScaleGestureDetector(
-        context,
-        object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            override fun onScale(detector: ScaleGestureDetector): Boolean {
-                renderThread?.zoomBy(detector.scaleFactor)
-                return true
-            }
-        }
-    )
 
     private var renderThread: WorkspaceRenderThread? = null
     private var onViewerFailure: ((ViewerFailure?) -> Unit)? = null
@@ -72,6 +63,11 @@ internal class TouchModelViewerView @JvmOverloads constructor(
     private var lastTouchY = 0f
     private var lastCentroidX = 0f
     private var lastCentroidY = 0f
+    private var twoFingerGesture = TwoFingerGesture.None
+    private var twoFingerStartCentroidX = 0f
+    private var twoFingerStartCentroidY = 0f
+    private var twoFingerStartDistance = 0f
+    private var lastTwoFingerDistance = 0f
     private var dragging = false
     private var suppressTapSelection = false
     private var resumed = true
@@ -80,6 +76,11 @@ internal class TouchModelViewerView @JvmOverloads constructor(
     private var lastPickAtMs = 0L
     private var lastPickCandidates: List<Long> = emptyList()
     private var lastPickIndex = -1
+    private var twoFingerTapCandidate = false
+    private var twoFingerTapStartedAtMs = 0L
+    private var lastTwoFingerTapX = Float.NaN
+    private var lastTwoFingerTapY = Float.NaN
+    private var lastTwoFingerTapAtMs = 0L
 
     init {
         holder.addCallback(this)
@@ -192,6 +193,11 @@ internal class TouchModelViewerView @JvmOverloads constructor(
         renderThread?.restoreCameraState(state)
     }
 
+    internal fun resetCameraView() {
+        pendingCameraState = null
+        renderThread?.resetCameraView()
+    }
+
     internal fun setPrinterBed(bed: PrinterBedSpec) {
         if (currentBed == bed) return
         currentBed = bed
@@ -297,7 +303,6 @@ internal class TouchModelViewerView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        scaleDetector.onTouchEvent(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downTouchX = event.x
@@ -306,12 +311,14 @@ internal class TouchModelViewerView @JvmOverloads constructor(
                 lastTouchY = event.y
                 dragging = false
                 suppressTapSelection = false
+                twoFingerGesture = TwoFingerGesture.None
             }
 
             MotionEvent.ACTION_POINTER_DOWN -> {
                 if (event.pointerCount >= 2) {
-                    lastCentroidX = centroidX(event)
-                    lastCentroidY = centroidY(event)
+                    beginTwoFingerGesture(event)
+                    twoFingerTapCandidate = event.pointerCount == 2
+                    twoFingerTapStartedAtMs = SystemClock.uptimeMillis()
                     dragging = true
                     suppressTapSelection = true
                 }
@@ -319,12 +326,8 @@ internal class TouchModelViewerView @JvmOverloads constructor(
 
             MotionEvent.ACTION_MOVE -> {
                 if (event.pointerCount >= 2) {
-                    val centroidX = centroidX(event)
-                    val centroidY = centroidY(event)
-                    renderThread?.panBy(centroidX - lastCentroidX, centroidY - lastCentroidY)
-                    lastCentroidX = centroidX
-                    lastCentroidY = centroidY
-                } else if (!scaleDetector.isInProgress) {
+                    updateTwoFingerGesture(event)
+                } else {
                     val deltaX = event.x - lastTouchX
                     val deltaY = event.y - lastTouchY
                     val totalDragX = event.x - downTouchX
@@ -340,6 +343,9 @@ internal class TouchModelViewerView @JvmOverloads constructor(
 
             MotionEvent.ACTION_POINTER_UP -> {
                 if (event.pointerCount - 1 < 2) {
+                    if (consumeTwoFingerTapIfNeeded(event)) {
+                        resetCameraView()
+                    }
                     val survivorIndex = if (event.actionIndex == 0) 1 else 0
                     if (survivorIndex in 0 until event.pointerCount) {
                         downTouchX = event.getX(survivorIndex)
@@ -367,6 +373,8 @@ internal class TouchModelViewerView @JvmOverloads constructor(
                 }
                 dragging = false
                 suppressTapSelection = false
+                twoFingerGesture = TwoFingerGesture.None
+                twoFingerTapCandidate = false
             }
         }
         return true
@@ -433,6 +441,92 @@ internal class TouchModelViewerView @JvmOverloads constructor(
         return total / event.pointerCount.toFloat()
     }
 
+    private fun beginTwoFingerGesture(event: MotionEvent) {
+        lastCentroidX = centroidX(event)
+        lastCentroidY = centroidY(event)
+        twoFingerStartCentroidX = lastCentroidX
+        twoFingerStartCentroidY = lastCentroidY
+        twoFingerStartDistance = pointerDistance(event)
+        lastTwoFingerDistance = twoFingerStartDistance
+        twoFingerGesture = TwoFingerGesture.Undecided
+    }
+
+    private fun updateTwoFingerGesture(event: MotionEvent) {
+        if (twoFingerGesture == TwoFingerGesture.None || event.pointerCount < 2) {
+            beginTwoFingerGesture(event)
+            return
+        }
+        val nextCentroidX = centroidX(event)
+        val nextCentroidY = centroidY(event)
+        val nextDistance = pointerDistance(event)
+        val panFromStart = hypot(nextCentroidX - twoFingerStartCentroidX, nextCentroidY - twoFingerStartCentroidY)
+        val pinchFromStart = abs(nextDistance - twoFingerStartDistance)
+        if (twoFingerGesture == TwoFingerGesture.Undecided) {
+            twoFingerGesture = decideTwoFingerGesture(panFromStart, pinchFromStart)
+        }
+        when (twoFingerGesture) {
+            TwoFingerGesture.Pan -> {
+                renderThread?.panBy(nextCentroidX - lastCentroidX, nextCentroidY - lastCentroidY)
+            }
+            TwoFingerGesture.Zoom -> {
+                val scaleFactor = if (lastTwoFingerDistance > 1f) nextDistance / lastTwoFingerDistance else 1f
+                if (scaleFactor.isFinite() && scaleFactor > 0f) {
+                    renderThread?.zoomBy(scaleFactor)
+                }
+            }
+            TwoFingerGesture.None,
+            TwoFingerGesture.Undecided -> Unit
+        }
+        lastCentroidX = nextCentroidX
+        lastCentroidY = nextCentroidY
+        lastTwoFingerDistance = nextDistance
+        if (
+            twoFingerTapCandidate &&
+            (panFromStart > TWO_FINGER_TAP_MOVE_LIMIT_PX || pinchFromStart > TWO_FINGER_TAP_MOVE_LIMIT_PX)
+        ) {
+            twoFingerTapCandidate = false
+        }
+    }
+
+    private fun decideTwoFingerGesture(panFromStart: Float, pinchFromStart: Float): TwoFingerGesture {
+        val deadZone = max(touchSlop, TWO_FINGER_DEAD_ZONE_PX)
+        if (panFromStart < deadZone && pinchFromStart < deadZone) {
+            return TwoFingerGesture.Undecided
+        }
+        return if (pinchFromStart >= panFromStart * ZOOM_DOMINANCE_RATIO) {
+            TwoFingerGesture.Zoom
+        } else {
+            TwoFingerGesture.Pan
+        }
+    }
+
+    private fun pointerDistance(event: MotionEvent): Float {
+        if (event.pointerCount < 2) return 0f
+        return hypot(event.getX(1) - event.getX(0), event.getY(1) - event.getY(0))
+    }
+
+    private fun consumeTwoFingerTapIfNeeded(event: MotionEvent): Boolean {
+        if (!twoFingerTapCandidate || event.pointerCount != 2) {
+            twoFingerTapCandidate = false
+            return false
+        }
+        twoFingerTapCandidate = false
+        val now = SystemClock.uptimeMillis()
+        if (now - twoFingerTapStartedAtMs > TWO_FINGER_TAP_TIMEOUT_MS) {
+            return false
+        }
+        val tapX = centroidX(event)
+        val tapY = centroidY(event)
+        val isDoubleTap =
+            now - lastTwoFingerTapAtMs <= TWO_FINGER_DOUBLE_TAP_TIMEOUT_MS &&
+                abs(tapX - lastTwoFingerTapX) <= TWO_FINGER_DOUBLE_TAP_RADIUS_PX &&
+                abs(tapY - lastTwoFingerTapY) <= TWO_FINGER_DOUBLE_TAP_RADIUS_PX
+        lastTwoFingerTapX = tapX
+        lastTwoFingerTapY = tapY
+        lastTwoFingerTapAtMs = now
+        return isDoubleTap
+    }
+
     private fun chooseObjectFromCandidates(screenX: Float, screenY: Float, candidates: List<Long>): Long? {
         if (candidates.isEmpty()) {
             lastPickCandidates = emptyList()
@@ -465,8 +559,21 @@ internal class TouchModelViewerView @JvmOverloads constructor(
     private fun Int.floorMod(modulus: Int): Int =
         ((this % modulus) + modulus) % modulus
 
+    private enum class TwoFingerGesture {
+        None,
+        Undecided,
+        Pan,
+        Zoom
+    }
+
     private companion object {
         private const val CYCLE_TAP_RADIUS_PX = 34f
         private const val CYCLE_TAP_TIMEOUT_MS = 1_000L
+        private const val TWO_FINGER_TAP_MOVE_LIMIT_PX = 10f
+        private const val TWO_FINGER_TAP_TIMEOUT_MS = 180L
+        private const val TWO_FINGER_DOUBLE_TAP_RADIUS_PX = 54f
+        private const val TWO_FINGER_DOUBLE_TAP_TIMEOUT_MS = 320L
+        private const val TWO_FINGER_DEAD_ZONE_PX = 7f
+        private const val ZOOM_DOMINANCE_RATIO = 1.18f
     }
 }

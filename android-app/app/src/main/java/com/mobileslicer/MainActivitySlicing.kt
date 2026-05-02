@@ -421,7 +421,12 @@ internal fun MainActivity.sliceCurrentModel(
                     sliced = false
                 )
             } else {
-                cleanupGeneratedGcodeCache(retainedPaths = retainedCachePaths(listOf(gcodeFile), includeCurrentGcode = false))
+                cleanupGeneratedGcodeCache(
+                    retainedPaths = retainedCachePaths(
+                        listOf(gcodeFile),
+                        includeCurrentGcode = false
+                    )
+                )
                 val summaryStartedAt = SystemClock.elapsedRealtime()
                 val nativeSummaryText = NativeEngineCalls.getGcodeSummary(handle)
                 val summary = GcodeSummaryParser.fromNativeSummary(nativeSummaryText)

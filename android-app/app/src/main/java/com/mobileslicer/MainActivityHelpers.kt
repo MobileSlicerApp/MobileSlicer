@@ -121,6 +121,7 @@ internal fun cleanupGeneratedGcodeCache(cacheDir: File, retainedPaths: Set<Strin
         if (!file.isFile) return@forEach
         val shouldDelete = when {
             file.name.startsWith("latest-slice-") -> true
+            file.name.startsWith("latest-send-") && file.name.endsWith(".gcode.3mf") -> true
             file.name.startsWith("orca_wrapper_") && file.name.endsWith(".gcode") -> true
             else -> false
         }

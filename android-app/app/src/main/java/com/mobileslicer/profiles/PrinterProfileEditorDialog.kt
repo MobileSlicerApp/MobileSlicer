@@ -23,6 +23,10 @@ import com.mobileslicer.appOutlineColor
 import com.mobileslicer.appTitleColor
 import com.mobileslicer.printerconnection.PrinterConnectionChoice
 import com.mobileslicer.printerconnection.PrinterConnectionChoicesResult
+import com.mobileslicer.printerconnection.PrinterBrowseTargetType
+import com.mobileslicer.printerconnection.PrinterConnectionField
+import com.mobileslicer.printerconnection.connectionCapabilities
+import com.mobileslicer.printerconnection.connectionFieldSpecs
 import com.mobileslicer.printerconnection.SimplyPrintOAuthResult
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -196,7 +200,15 @@ internal fun PrinterProfileEditorDialog(
             printHostCaFile = draft.printHostCaFile.trim(),
             printHostUser = draft.printHostUser.trim(),
             printHostPassword = draft.printHostPassword,
-            printHostSslIgnoreRevoke = draft.printHostSslIgnoreRevoke
+            printHostSslIgnoreRevoke = draft.printHostSslIgnoreRevoke,
+            bambuBedType = draft.bambuBedType.trim(),
+            bambuUseAms = draft.bambuUseAms,
+            bambuAmsMapping = draft.bambuAmsMapping.trim(),
+            bambuNozzleMapping = draft.bambuNozzleMapping.trim(),
+            bambuBedLeveling = draft.bambuBedLeveling,
+            bambuFlowCalibration = draft.bambuFlowCalibration,
+            bambuVibrationCalibration = draft.bambuVibrationCalibration,
+            bambuTimelapse = draft.bambuTimelapse
         )
 
     ConnectionStatusDialog(
@@ -384,8 +396,18 @@ internal fun PrinterProfileEditorDialog(
                         options = options.printHostTypeOptions,
                         onSelected = { draft.printHostType = it }
                     )
-                    ProfileTextField(draft.printerAgent, { draft.printerAgent = it }, "Printer Agent")
-                    ProfileTextField(draft.printHost, { draft.printHost = it }, "Hostname, IP or URL")
+                    val connectionCapabilities = draft.printHostType.connectionCapabilities()
+                    val connectionFieldSpecs = draft.printHostType.connectionFieldSpecs().associateBy { it.field }
+                    fun connectionField(field: PrinterConnectionField) = connectionFieldSpecs.getValue(field)
+                    fun connectionFieldVisible(field: PrinterConnectionField) = connectionField(field).visible
+                    if (connectionFieldVisible(PrinterConnectionField.PrinterAgent)) {
+                        ProfileTextField(draft.printerAgent, { draft.printerAgent = it }, connectionField(PrinterConnectionField.PrinterAgent).label)
+                    }
+                    ProfileTextField(
+                        draft.printHost,
+                        { draft.printHost = it },
+                        connectionField(PrinterConnectionField.Host).label
+                    )
                     Button(
                         onClick = {
                             autoRefreshPrinterStatus = false
@@ -395,7 +417,9 @@ internal fun PrinterProfileEditorDialog(
                                 if (result.success && result.choices.isNotEmpty()) {
                                     connectionTargetDestination = "host"
                                     connectionTargetDialogTitle = result.title
-                                    connectionTargetChoices = result.choices
+                                    connectionTargetChoices = result.choices.map { choice ->
+                                        choice.copy(targetType = PrinterBrowseTargetType.Host)
+                                    }
                                 } else {
                                     connectionStatusDialog = result.userMessage()
                                 }
@@ -408,21 +432,24 @@ internal fun PrinterProfileEditorDialog(
                     ) {
                         Text(if (browsingConnectionTargets) "Searching..." else "Discover Printers")
                     }
-                    ProfileTextField(draft.printHostWebUi, { draft.printHostWebUi = it }, "Printer web UI URL")
-                    ProfileDropdownField(
-                        label = "Authentication",
-                        selectedLabel = draft.printHostAuthorizationType.displayLabel,
-                        options = options.printHostAuthorizationOptions,
-                        onSelected = { draft.printHostAuthorizationType = it }
-                    )
-                    ProfileTextField(draft.printHostApiKey, { draft.printHostApiKey = it }, if (draft.printHostType == PrintHostType.BambuLan) "Access code" else "API key / token")
-                    ProfileTextField(draft.printHostPort, { draft.printHostPort = it }, if (draft.printHostType == PrintHostType.BambuLan) "Device serial" else "Printer path or port")
-                    val connectionPickerLabel = when (draft.printHostType) {
-                        PrintHostType.Obico,
-                        PrintHostType.Repetier -> "Browse Printers"
-                        PrintHostType.PrusaLink -> "Browse Storage"
-                        else -> null
+                    if (connectionFieldVisible(PrinterConnectionField.WebUi)) {
+                        ProfileTextField(draft.printHostWebUi, { draft.printHostWebUi = it }, connectionField(PrinterConnectionField.WebUi).label)
                     }
+                    if (connectionFieldVisible(PrinterConnectionField.Authorization)) {
+                        ProfileDropdownField(
+                            label = connectionField(PrinterConnectionField.Authorization).label,
+                            selectedLabel = draft.printHostAuthorizationType.displayLabel,
+                            options = options.printHostAuthorizationOptions,
+                            onSelected = { draft.printHostAuthorizationType = it }
+                        )
+                    }
+                    if (connectionFieldVisible(PrinterConnectionField.ApiKey)) {
+                        ProfileTextField(draft.printHostApiKey, { draft.printHostApiKey = it }, connectionField(PrinterConnectionField.ApiKey).label)
+                    }
+                    if (connectionFieldVisible(PrinterConnectionField.PathOrPort)) {
+                        ProfileTextField(draft.printHostPort, { draft.printHostPort = it }, connectionField(PrinterConnectionField.PathOrPort).label)
+                    }
+                    val connectionPickerLabel = connectionCapabilities.browseTargetsLabel
                     if (connectionPickerLabel != null) {
                         Button(
                             onClick = {
@@ -447,8 +474,8 @@ internal fun PrinterProfileEditorDialog(
                             Text(if (browsingConnectionTargets) "Loading..." else connectionPickerLabel)
                         }
                     }
-                    if (draft.printHostType == PrintHostType.Repetier) {
-                        ProfileTextField(draft.printHostGroup, { draft.printHostGroup = it }, "Model group")
+                    if (connectionFieldVisible(PrinterConnectionField.Group)) {
+                        ProfileTextField(draft.printHostGroup, { draft.printHostGroup = it }, connectionField(PrinterConnectionField.Group).label)
                         Button(
                             onClick = {
                                 autoRefreshPrinterStatus = false
@@ -471,18 +498,61 @@ internal fun PrinterProfileEditorDialog(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            Text(if (browsingConnectionTargets) "Loading..." else "Browse Groups")
+                            Text(if (browsingConnectionTargets) "Loading..." else connectionCapabilities.browseGroupsLabel.orEmpty().ifBlank { "Browse Groups" })
                         }
                     }
-                    ProfileTextField(draft.printHostCaFile, { draft.printHostCaFile = it }, "HTTPS CA File")
-                    ProfileTextField(draft.printHostUser, { draft.printHostUser = it }, "User")
-                    ProfileTextField(draft.printHostPassword, { draft.printHostPassword = it }, "Password")
-                    ProfileDropdownField(
-                        label = "Ignore HTTPS certificate revocation checks",
-                        selectedLabel = if (draft.printHostSslIgnoreRevoke) "Enabled" else "Disabled",
-                        options = options.boolEnabledDisabledOptions,
-                        onSelected = { draft.printHostSslIgnoreRevoke = it }
-                    )
+                    if (connectionFieldVisible(PrinterConnectionField.CaFile)) {
+                        ProfileTextField(draft.printHostCaFile, { draft.printHostCaFile = it }, connectionField(PrinterConnectionField.CaFile).label)
+                    }
+                    if (connectionFieldVisible(PrinterConnectionField.User)) {
+                        ProfileTextField(draft.printHostUser, { draft.printHostUser = it }, connectionField(PrinterConnectionField.User).label)
+                    }
+                    if (connectionFieldVisible(PrinterConnectionField.Password)) {
+                        ProfileTextField(draft.printHostPassword, { draft.printHostPassword = it }, connectionField(PrinterConnectionField.Password).label)
+                    }
+                    if (connectionFieldVisible(PrinterConnectionField.SslRevoke)) {
+                        ProfileDropdownField(
+                            label = connectionField(PrinterConnectionField.SslRevoke).label,
+                            selectedLabel = if (draft.printHostSslIgnoreRevoke) "Enabled" else "Disabled",
+                            options = options.boolEnabledDisabledOptions,
+                            onSelected = { draft.printHostSslIgnoreRevoke = it }
+                        )
+                    }
+                    if (connectionFieldVisible(PrinterConnectionField.BambuBedType)) {
+                        ProfileTextField(draft.bambuBedType, { draft.bambuBedType = it }, connectionField(PrinterConnectionField.BambuBedType).label)
+                        ProfileDropdownField(
+                            label = connectionField(PrinterConnectionField.BambuUseAms).label,
+                            selectedLabel = if (draft.bambuUseAms) "Enabled" else "Disabled",
+                            options = options.boolEnabledDisabledOptions,
+                            onSelected = { draft.bambuUseAms = it }
+                        )
+                        ProfileTextField(draft.bambuAmsMapping, { draft.bambuAmsMapping = it }, connectionField(PrinterConnectionField.BambuAmsMapping).label)
+                        ProfileTextField(draft.bambuNozzleMapping, { draft.bambuNozzleMapping = it }, connectionField(PrinterConnectionField.BambuNozzleMapping).label)
+                        ProfileDropdownField(
+                            label = connectionField(PrinterConnectionField.BambuBedLeveling).label,
+                            selectedLabel = if (draft.bambuBedLeveling) "Enabled" else "Disabled",
+                            options = options.boolEnabledDisabledOptions,
+                            onSelected = { draft.bambuBedLeveling = it }
+                        )
+                        ProfileDropdownField(
+                            label = connectionField(PrinterConnectionField.BambuFlowCalibration).label,
+                            selectedLabel = if (draft.bambuFlowCalibration) "Enabled" else "Disabled",
+                            options = options.boolEnabledDisabledOptions,
+                            onSelected = { draft.bambuFlowCalibration = it }
+                        )
+                        ProfileDropdownField(
+                            label = connectionField(PrinterConnectionField.BambuVibrationCalibration).label,
+                            selectedLabel = if (draft.bambuVibrationCalibration) "Enabled" else "Disabled",
+                            options = options.boolEnabledDisabledOptions,
+                            onSelected = { draft.bambuVibrationCalibration = it }
+                        )
+                        ProfileDropdownField(
+                            label = connectionField(PrinterConnectionField.BambuTimelapse).label,
+                            selectedLabel = if (draft.bambuTimelapse) "Enabled" else "Disabled",
+                            options = options.boolEnabledDisabledOptions,
+                            onSelected = { draft.bambuTimelapse = it }
+                        )
+                    }
                     if (draft.printHostType == PrintHostType.SimplyPrint) {
                         Button(
                             onClick = {

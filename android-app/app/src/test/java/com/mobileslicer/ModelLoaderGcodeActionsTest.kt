@@ -4,6 +4,7 @@ import com.mobileslicer.calibration.CalibrationJob
 import com.mobileslicer.calibration.CalibrationOptions
 import com.mobileslicer.calibration.CalibrationType
 import com.mobileslicer.printerconnection.PrinterUploadAction
+import com.mobileslicer.profiles.PrintHostType
 import com.mobileslicer.profiles.ProfileStoreRepository
 import com.mobileslicer.viewer.MeshBounds
 import com.mobileslicer.viewer.ViewerModelTransform
@@ -124,6 +125,24 @@ class ModelLoaderGcodeActionsTest {
                 uploadAction = PrinterUploadAction.UploadOnly
             )
         )
+    }
+
+    @Test
+    fun bambuUploadRequestKeepsGcodeSourceForOnDemandPackageExport() {
+        val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(
+            printHostType = PrintHostType.BambuLan
+        )
+        val request = planPrinterUploadRequest(
+            gcodeFilePath = "/tmp/output.gcode",
+            sendToPrinterInProgress = false,
+            calibrationJob = null,
+            remoteFileName = "remote.gcode",
+            printerProfile = printer,
+            uploadAction = PrinterUploadAction.UploadAndStart
+        )
+
+        assertEquals("/tmp/output.gcode", request?.gcodeFilePath)
+        assertEquals("remote.gcode", request?.remoteFileName)
     }
 
     @Test

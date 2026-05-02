@@ -4,7 +4,7 @@ This document tracks the printer connection feature for Mobile Slicer. The
 Android app stores Orca-style printer connection profile fields and now has
 runtime paths for manually entered Octo/Klipper, PrusaLink, PrusaConnect, Duet,
 Repetier, ESP3D, CrealityPrint, FlashAir, AstroBox, MKS, Flashforge, Obico,
-SimplyPrint, Elegoo Link, and guarded Bambu LAN setup.
+SimplyPrint, Elegoo Link, and Bambu LAN.
 
 ## Current App Status
 
@@ -50,10 +50,18 @@ Implemented:
     of Orca's `SimplyPrint.cpp`: `GET /oauth2/TokenInfo` with
     `Authorization: Bearer {token}`.
   * For `Bambu LAN`, Mobile Slicer follows Orca's non-`PrintHost` boundary:
-    it stores the local IP, access code, and device serial in profile fields,
-    then performs guarded reachability checks for Orca's secure LAN MQTT/FTPS
-    ports. Direct upload/start remains disabled until the MQTT plus FTPS flow
-    is validated on hardware.
+    the profile connection tab switches from standard third-party print-host
+    fields to Bambu LAN device setup fields. It stores the local IP/hostname,
+    LAN access code, and device serial/dev id, then performs guarded
+    reachability checks for Orca's secure LAN MQTT and FTPS ports. Setup is
+    only marked successful when both services are reachable, because
+    upload-and-start needs both. Upload/start routes through a Bambu device
+    agent instead of the standard HTTP `PrintHost` clients.
+  * Bambu `.gcode.3mf` output is exported on demand by the Android native Orca wrapper
+    through `Slic3r::store_bbs_3mf(StoreParams&)` using `SaveStrategy::WithGcode`,
+    `SplitModel`, `SkipAuxiliary`, `Silence`, and `Zip64`. The mobile build
+    compiles the BBS exporter in an Android export-only mode, excluding Orca's
+    desktop 3MF importer and backup/autosave thread code from the app binary.
 * `Discover Printers` uses Android NSD/mDNS to look for printer-specific local
   services, including OctoPrint, Moonraker, PrusaLink, and Bambu LAN
   service-name candidates. It fills the host field from a picker; manual entry
@@ -65,7 +73,10 @@ Implemented:
   `/api/version` on common local ports. The scan only adds a candidate after a
   printer-specific API response, so generic web devices are not listed.
 * `Refresh Status` reports printer state, file, progress percent when the host
-  provides it, and available nozzle/bed temperatures. The status dialog
+  provides it, and available nozzle/bed temperatures. Moonraker and OctoPrint
+  status responses are parsed into typed `PrinterRuntimeStatus` fields directly
+  from their API JSON; other hosts still preserve their user-facing status line
+  and attach best-effort runtime metadata when possible. The status dialog
   auto-refreshes while it is open.
 * Printer controls appear in the Preview top bar after a successful slice.
   * If no printer host or Device UI is configured, `Send` and `Printer` stay
@@ -117,8 +128,30 @@ Implemented:
     The app opens the SimplyPrint import URL built from the returned temp UUID.
     Mobile Slicer exposes this as upload-only / upload-to-queue, not direct
     print start.
+  * Bambu LAN sending uses the Bambu-specific device agent route. Slicing
+    writes the normal `.gcode` file; when the user sends to a Bambu LAN printer,
+    Mobile Slicer exports the Bambu `.gcode.3mf` package on demand through
+    Orca's BBS exporter. Upload-only transfers that package over local implicit
+    FTPS and stops there. Upload-and-start transfers the same package and then
+    publishes the local MQTT start command to `device/{dev_id}/request`.
   * `Send` opens upload choices for upload-only or upload-and-start and lets
-    the user edit the remote `.gcode` filename before uploading.
+    the user edit the remote `.gcode` filename before uploading. Bambu LAN
+    sends expose common per-send controls, upload name, bed type, and bed
+    leveling, directly in the sheet. Less common Bambu send controls,
+    AMS/nozzle mapping, AMS enablement, flow calibration, vibration
+    calibration, and timelapse, stay available behind a compact `Bambu options`
+    expander so parity options are present without overcrowding the primary
+    upload path. Retries keep the selected send options with the upload request.
+  * `Send` actions are driven by shared connection capability metadata instead
+    of one-off host checks. Bambu LAN keeps upload/start visible but marks the
+    route as `BambuLanAgent`; SimplyPrint uses `ExternalImport`; normal
+    third-party hosts use `HttpPrintHost`.
+  * The connection tab is driven by `PrinterConnectionFieldSpec` metadata so
+    host-specific labels, visibility, required fields, and browse buttons stay
+    centralized with `PrinterConnectionCapabilities`.
+  * Status results now carry `PrinterRuntimeStatus` metadata from direct host
+    parsing when implemented, or inferred from the host status result as a
+    fallback, while preserving the existing user-facing status text.
   * Active uploads show percent progress and can be cancelled from the upload
     dialog.
   * `Printer` opens `Device UI` when set, otherwise the configured host, in an
@@ -145,12 +178,77 @@ Implemented:
   * Upload normalizes configured hosts to the API origin before probing or
     uploading, so web UI routes such as `/#` are not included in API URLs.
 
-Not implemented:
+Remaining non-blocking parity work:
 
-* host-specific field visibility.
-* retry UI and richer post-upload action handling.
-* file browser / console integration.
-* Bambu LAN upload/start. The current Bambu path is setup and reachability only.
+* hardware validation for hosts marked above, especially Bambu LAN FTPS/MQTT
+  task options and firmware-specific accepted values.
+* optional in-app remote file browser and console surfaces. Upload, start,
+  queue/import, status, setup, discovery, and device-browser flows do not depend
+  on those screens because the app already opens the printer's native Device UI.
+
+## Bambu LAN Connection Tab
+
+Orca treats Bambu printers differently from the third-party `PrintHost`
+implementations listed in `PrintHost.cpp`. Bambu routes through
+`BBLPrinterAgent` and `BBLNetworkPlugin`, with device id, LAN IP, access code,
+MQTT, FTP/FTPS, file MD5, AMS/nozzle mapping, and print-task options.
+
+Mobile Slicer therefore keeps Bambu in `Profiles > Printer > Connection`, but
+the selected `Bambu LAN` service uses Bambu-specific labels:
+
+* `Bambu LAN IP or hostname` maps to the local device address.
+* `LAN access code` maps to Orca's Bambu LAN password/access code.
+* `Device serial / dev id` maps to the Bambu device id used by Orca's network
+  agent.
+* Standard print-host-only fields such as HTTP auth type, HTTPS CA file, and
+  generic username/password are not part of the Bambu LAN setup surface.
+
+Mobile Slicer implements a dedicated `BambuLanPrinterAgent` beside the existing
+HTTP-style clients. It keeps the current profile fields and implements Orca's
+local send flow:
+
+1. upload the generated `.gcode.3mf` package through the printer's FTPS
+   transfer path.
+2. compute the package MD5 while streaming the upload.
+3. for upload-and-start, connect to the printer's secure local MQTT endpoint
+   with the LAN access code and publish the local print/start command.
+4. for upload-only, do not send the MQTT start command.
+5. use the existing Bambu reachability/status checks for setup feedback.
+
+The Bambu boundary exists in code as:
+
+* `BambuLanDeviceConfig`: host, device id, LAN access code, default user
+  `bblp`, secure MQTT port `8883`, and secure transfer port `990`.
+* `BambuLanPrintOptions`: plate index, bed type, AMS/nozzle mapping, bed
+  leveling, flow calibration, vibration calibration, and timelapse flags.
+* `BambuLanPrintJob`: local file, remote filename/folder, and print options.
+* `BambuLanTransferClient`: the FTP/FTPS upload boundary.
+* `BambuLanMqttClient`: the MQTT connect/start/status boundary.
+* `orca_write_bambu_gcode_3mf_to_file`: native Android wrapper around Orca's
+  BBS `store_bbs_3mf` exporter. It packages the current model and generated
+  plate G-code as `.gcode.3mf` for the Bambu LAN agent when a Bambu send is
+  requested.
+* `BambuLanPrinterAgent`: validates a real local file, uploads through transfer,
+  starts through MQTT only for upload-and-start, and disconnects.
+* `BambuLanFtpsTransferClient`: concrete implicit FTPS transfer client for the
+  local printer transfer port.
+* `BambuLanMqttTransportClient`: concrete secure local MQTT client publishing
+  `project_file` commands to `device/{dev_id}/request`.
+
+The transport implementation is intentionally fakeable in unit tests. Real Bambu upload
+is routed through the device agent only with a `.gcode.3mf` source package.
+The workspace send action exports and uses the Bambu package only for Bambu LAN
+profiles, while normal slice, export, share, and other printer uploads continue
+to use the normal `.gcode` file.
+
+Remaining Bambu parity requirement:
+
+* validate the FTPS/MQTT start flow against real Bambu hardware and refine any
+  firmware-specific accepted values for AMS mapping, nozzle mapping,
+  calibration flags, and bed type.
+* validate generated `.gcode.3mf` packages on real Bambu hardware. The package
+  now comes from Orca's BBS exporter; hardware validation is still required for
+  printer firmware behavior and task-option details.
 
 ## Orca Source References
 
@@ -239,6 +337,21 @@ Use the vendored Orca source as the behavioral reference:
     `dev_id`, FTP folder, and access code, then uses secure local MQTT and
     FTP/FTPS behavior through the BBL network/plugin path.
 
+External protocol references used where Android needs API details beyond
+Orca's desktop wrappers:
+
+* Moonraker File Management API:
+  `https://moonraker.readthedocs.io/en/latest/external_api/file_manager/`
+  documents `POST /server/files/upload`, the `gcodes` root, and the `print`
+  upload field.
+* Moonraker Printer Administration API:
+  `https://moonraker.readthedocs.io/en/latest/external_api/printer/`
+  documents `POST /printer/gcode/script` with the required `script` parameter.
+* OctoPrint File Operations API:
+  `https://docs.octoprint.org/en/dev/api/files.html`
+  documents multipart file uploads for `/api/files/{location}` and the
+  upload/start form parameters.
+
 ## Orca Connection Model
 
 Orca separates connection settings from the slicer settings that affect G-code.
@@ -281,11 +394,16 @@ ship incrementally and must be documented per host.
 | Flashforge | `flashforge` | Test, basic status, upload-only, and upload-and-start implemented from Orca `Flashforge.cpp`. Uses `Printer path or port` as optional TCP console port, defaulting to `8899`. Hardware validation still needed. |
 | SimplyPrint | `simplyprint` | Partial runtime support from Orca `SimplyPrint.cpp`: OAuth/PKCE login, encrypted access/refresh token storage, token refresh for API calls, small temp upload, chunked temp upload, and automatic in-app opening of the SimplyPrint import URL. |
 | Elegoo Link | `elegoolink` | Test, basic status, upload-only, and upload-and-start implemented from Orca `ElegooLink.cpp`. OctoPrint-compatible Elegoo hosts use the OctoPrint upload path; native Elegoo chunk upload uses MD5/UUID metadata and WebSocket start on port `3030`. Hardware validation still needed. |
-| Bambu LAN | `bambulan` | Mobile Slicer app-specific guarded setup mode based on Orca's BBL network boundary, not a normal Orca `PrintHost`. Stores IP, access code, and device serial, and checks secure LAN MQTT/FTPS reachability. Upload/start intentionally disabled pending hardware validation. |
+| Bambu LAN | `bambulan` | Mobile Slicer app-specific setup mode based on Orca's BBL network boundary, not a normal Orca `PrintHost`. Stores IP, access code, and device serial/dev id, checks secure LAN MQTT/FTPS reachability, exports `.gcode.3mf` through Orca's BBS exporter, and sends through the dedicated Bambu MQTT plus FTPS device-agent runtime. Hardware validation still needed. |
 
 ## Android Implementation Plan
 
 Host support roadmap:
+
+0. Keep connection capabilities centralized. Implemented with
+   `PrinterConnectionCapabilities` so UI surfaces and repository/runtime logic
+   can reason about upload, upload-and-start, queue, browse, status, and
+   special upload routes without scattered host checks.
 
 1. Keep Octo/Klipper as the known working baseline.
 2. Add Duet/RepRapFirmware from Orca `Duet.cpp`. Implemented; needs hardware
@@ -303,8 +421,9 @@ Host support roadmap:
 6. Add Bambu LAN as a separate printer-agent path, not a normal `PrintHost`
    client. Orca routes Bambu through `BBLPrinterAgent` and `BBLNetworkPlugin`,
    with LAN discovery, serial/device ID, access code/password, MQTT, and
-   FTP/FTPS upload. Mobile Slicer now has guarded setup/reachability only;
-   upload/start remains a future hardware-validated step.
+   FTP/FTPS upload. Mobile Slicer now has Bambu-specific setup and
+   reachability checks, Orca BBS `.gcode.3mf` export, and the dedicated MQTT
+   plus FTPS agent path. Hardware validation is still required.
 
 First runtime milestone:
 

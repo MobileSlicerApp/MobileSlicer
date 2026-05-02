@@ -20,7 +20,7 @@ internal class ViewerCamera(
 ) {
     private var orbitYawDegrees = DEFAULT_YAW_DEGREES
     private var orbitPitchDegrees = DEFAULT_PITCH_DEGREES
-    private var zoom = 1f
+    private var zoom = DEFAULT_ZOOM
     private var panX = 0f
     private var panY = 0f
     private var focusX = 0f
@@ -78,6 +78,14 @@ internal class ViewerCamera(
         zoom = state.zoom.coerceIn(MIN_ZOOM, MAX_ZOOM)
         panX = state.panX
         panY = state.panY
+        updateOrbitCache()
+    }
+
+    fun resetView() {
+        orbitYawDegrees = DEFAULT_YAW_DEGREES
+        orbitPitchDegrees = DEFAULT_PITCH_DEGREES
+        zoom = DEFAULT_ZOOM
+        resetPan()
         updateOrbitCache()
     }
 
@@ -200,16 +208,17 @@ internal class ViewerCamera(
     }
 
     private companion object {
-        private const val DEFAULT_YAW_DEGREES = -38f
-        private const val DEFAULT_PITCH_DEGREES = 46f
+        private const val DEFAULT_YAW_DEGREES = -90f
+        private const val DEFAULT_PITCH_DEGREES = 42f
+        private const val DEFAULT_ZOOM = 0.55f
         private const val MIN_PITCH_DEGREES = -84f
         private const val MAX_PITCH_DEGREES = 82f
         private const val YAW_DEGREES_PER_PIXEL = 0.42f
         private const val PITCH_DEGREES_PER_PIXEL = 0.30f
         private const val PAN_SCALE = 1.15f
         private const val MIN_TOUCH_DELTA_PX = 0.35f
-        private const val MIN_ZOOM = 0.45f
-        private const val MAX_ZOOM = 12f
+        private const val MIN_ZOOM = 0.28f
+        private const val MAX_ZOOM = 24f
         private const val MIN_SCENE_SPAN = 40f
         private const val FOCUS_HEIGHT_FACTOR = 0.22f
         private const val MIN_FOCUS_Z = 4f

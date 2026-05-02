@@ -343,6 +343,16 @@ internal class WorkspaceRenderThread(
         }
     }
 
+    fun resetCameraView() {
+        synchronized(stateLock) {
+            pendingCameraState = null
+            camera.resetView()
+            cameraStateVersion++
+            dirty = true
+            stateLock.notifyAll()
+        }
+    }
+
     fun setPrinterBed(bed: PrinterBedSpec) {
         synchronized(stateLock) {
             if (pendingBed == bed) return

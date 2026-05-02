@@ -93,6 +93,7 @@ target_include_directories(orca_android_libslic3r_port_config INTERFACE
     ${ORCA_DEPS_SRC_ROOT}/clipper2/Clipper2Lib/include
     ${ORCA_DEPS_SRC_ROOT}/libigl
     ${ORCA_DEPS_SRC_ROOT}/miniz
+    ${ORCA_DEPS_SRC_ROOT}/expat
     ${ORCA_DEPS_SRC_ROOT}/eigen
     ${ORCA_DEPS_SRC_ROOT}/qhull/src
 )
@@ -463,6 +464,8 @@ set(ORCA_ANDROID_LIBSLIC3R_PRINT_GCODE_ENGINE_SOURCES
     ${ORCA_LIBSLIC3R_ROOT}/Triangulation.cpp
     ${ORCA_LIBSLIC3R_ROOT}/Model.cpp
     ${ORCA_LIBSLIC3R_ROOT}/Format/STL.cpp
+    ${ORCA_LIBSLIC3R_ROOT}/Format/bbs_3mf.cpp
+    ${ORCA_LIBSLIC3R_ROOT}/miniz_extension.cpp
     ${ORCA_DEPS_SRC_ROOT}/semver/semver.c
     ${ORCA_DEPS_SRC_ROOT}/admesh/connect.cpp
     ${ORCA_DEPS_SRC_ROOT}/admesh/normals.cpp
@@ -476,6 +479,9 @@ set(ORCA_ANDROID_LIBSLIC3R_PRINT_GCODE_ENGINE_SOURCES
     ${ORCA_DEPS_SRC_ROOT}/clipper2/Clipper2Lib/src/clipper.rectclip.cpp
     ${ORCA_DEPS_SRC_ROOT}/clipper2/Clipper2Lib/src/clipper2_z.cpp
     ${ORCA_DEPS_SRC_ROOT}/miniz/miniz.c
+    ${ORCA_DEPS_SRC_ROOT}/expat/xmlparse.c
+    ${ORCA_DEPS_SRC_ROOT}/expat/xmlrole.c
+    ${ORCA_DEPS_SRC_ROOT}/expat/xmltok.c
     # First print/gcode root units under evaluation.
     ${ORCA_LIBSLIC3R_ROOT}/PrintBase.cpp
     ${ORCA_LIBSLIC3R_ROOT}/PrintApply.cpp
@@ -582,6 +588,7 @@ set(ORCA_ANDROID_LIBSLIC3R_PRINT_GCODE_ENGINE_SOURCES
     # Boost.Nowide compiled source (setenv).
     ${ORCA_ANDROID_BOOST_NOWIDE_CSTDLIB_SRC}
     ${CMAKE_CURRENT_SOURCE_DIR}/android_real_gcodeprocessor_guard.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/android_bbs_3mf_export_support.cpp
     # Remaining Android linker/platform stubs. GCodeProcessor stubs in this file
     # are compiled out when ORCA_ANDROID_REAL_GCODE_PROCESSOR is defined.
     ${CMAKE_CURRENT_SOURCE_DIR}/android_libslic3r_stubs.cpp
@@ -614,6 +621,9 @@ target_compile_definitions(orca_android_libslic3r_print_gcode_lib PRIVATE
     ORCA_ANDROID_REAL_FUZZY_SKIN
     ORCA_ANDROID_REAL_GCODE_PROCESSOR
     ORCA_ANDROID_REAL_MEDIAL_AXIS
+    ORCA_ANDROID_REAL_BBS_3MF
+    ORCA_ANDROID_BBS_EXPORT_ONLY
+    XML_STATIC
 )
 
 if (ORCA_ANDROID_LIBSLIC3R_BUILD_EXPERIMENTAL_TOOLS)

@@ -67,11 +67,6 @@ bool load_amf(const char * /* path */, DynamicPrintConfig * /* config */, Config
     return false;
 }
 
-bool load_bbs_3mf(const char * /* path */, DynamicPrintConfig * /* config */, ConfigSubstitutionContext * /* config_substitutions */, Model * /* model */, PlateDataPtrs * /* plate_data_list */, std::vector<Preset *> * /* project_presets */, bool * /* is_bbl_3mf */, Semver * /* file_version */, Import3mfProgressFn /* proFn */, LoadStrategy /* strategy */, BBLProject * /* project */, int /* plate_id */)
-{
-    return false;
-}
-
 bool load_3mf(const char * /* path */, DynamicPrintConfig & /* config */, ConfigSubstitutionContext & /* config_substitutions */, Model * /* model */, bool /* check_version */)
 {
     return false;
@@ -86,11 +81,18 @@ void PrusaFileParser::_start_element_handler(const char * /* name */, const char
 
 void PrusaFileParser::_characters_handler(const char * /* s */, int /* len */) {}
 
+#ifndef ORCA_ANDROID_REAL_BBS_3MF
+bool load_bbs_3mf(const char * /* path */, DynamicPrintConfig * /* config */, ConfigSubstitutionContext * /* config_substitutions */, Model * /* model */, PlateDataPtrs * /* plate_data_list */, std::vector<Preset *> * /* project_presets */, bool * /* is_bbl_3mf */, Semver * /* file_version */, Import3mfProgressFn /* proFn */, LoadStrategy /* strategy */, BBLProject * /* project */, int /* plate_id */)
+{
+    return false;
+}
+
 void delete_object_mesh(ModelObject & /* object */) {}
 
 void save_object_mesh(ModelObject & /* object */) {}
 
 void remove_backup(Model & /* model */, bool /* removeAll */) {}
+#endif
 
 unsigned get_current_pid()
 {
@@ -102,7 +104,9 @@ const std::string &temporary_dir()
     return g_temporary_dir;
 }
 
+#ifndef ORCA_ANDROID_REAL_BBS_3MF
 void save_string_file(const boost::filesystem::path & /* p */, const std::string & /* str */) {}
+#endif
 
 Step::Step(std::string /* path */, ImportStepProgressFn /* stepFn */, StepIsUtf8Fn /* isUtf8Fn */) {}
 

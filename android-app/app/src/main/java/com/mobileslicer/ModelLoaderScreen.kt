@@ -12,6 +12,7 @@ import com.mobileslicer.profiles.activeConfiguration
 import com.mobileslicer.profiles.toNativeSliceConfigBuildResult
 import com.mobileslicer.printerconnection.PrinterConnectionChoicesResult
 import com.mobileslicer.printerconnection.PrinterConnectionResult
+import com.mobileslicer.printerconnection.BambuLanPrintOptions
 import com.mobileslicer.printerconnection.PrinterUploadAction
 import com.mobileslicer.printerconnection.SimplyPrintOAuthResult
 import com.mobileslicer.calibration.CalibrationJob
@@ -99,7 +100,7 @@ internal fun ModelLoaderScreen(
     onSliceRequested: (String, List<PlateObject>, String?, StlMesh?, MeshBounds?, PrinterBedSpec, ViewerModelTransform?, String?) -> SliceResult,
     onExportRequested: (Uri, String) -> String,
     onSavedProjectNativeLoadRequested: (List<PlateObject>, PrinterBedSpec) -> Boolean,
-    onSendToPrinterRequested: suspend (String, String, PrinterProfile, PrinterUploadAction, (Int) -> Unit) -> PrinterConnectionResult,
+    onSendToPrinterRequested: suspend (String, String, PrinterProfile, PrinterUploadAction, BambuLanPrintOptions?, (Int) -> Unit) -> PrinterConnectionResult,
     onTestPrinterConnectionRequested: suspend (PrinterProfile) -> String,
     onPrinterStatusRequested: suspend (PrinterProfile) -> String,
     onDiscoverPrinterHostsRequested: suspend () -> PrinterConnectionChoicesResult,
@@ -538,8 +539,7 @@ internal fun ModelLoaderScreen(
     fun autoOrientPlateObjects() {
         val result = planAutoOrientPlateObjects(
             plateObjects = plateObjects,
-            selectedPlateObjectId = selectedPlateObjectId,
-            bed = selectedPrinter.toBedSpec()
+            selectedPlateObjectId = selectedPlateObjectId
         )
         if (result == null) {
             workspaceStatus = autoOrientPlateObjectsUnavailableStatus()
@@ -1168,14 +1168,15 @@ internal fun ModelLoaderScreen(
                         exportLauncher.launch(action.fileName)
                     }
                 },
-                onSendToPrinter = { uploadAction, remoteFileName ->
+                onSendToPrinter = { uploadAction, remoteFileName, bambuOptions ->
                     planPrinterUploadRequest(
                         gcodeFilePath = currentGcodeFilePath,
                         sendToPrinterInProgress = sendToPrinterInProgress,
                         calibrationJob = currentCalibrationJob,
                         remoteFileName = remoteFileName,
                         printerProfile = selectedPrinter,
-                        uploadAction = uploadAction
+                        uploadAction = uploadAction,
+                        bambuOptions = bambuOptions
                     )?.let { request ->
                         lastPrinterUploadRequest = request
                         printerUploadDialogCanRetry = false

@@ -15,13 +15,13 @@ import com.mobileslicer.R
 import com.mobileslicer.appBackgroundGradient
 import com.mobileslicer.appBodyColor
 import com.mobileslicer.appCardColor
-import com.mobileslicer.appCardColorMuted
-import com.mobileslicer.appMutedColor
-import com.mobileslicer.appOutlineColor
 import com.mobileslicer.appTitleColor
 import com.mobileslicer.profiles.ActiveSlicerConfiguration
-import com.mobileslicer.profiles.PrintHostType
 import com.mobileslicer.profiles.PrinterProfile
+import com.mobileslicer.profiles.PrintHostType
+import com.mobileslicer.printerconnection.BambuLanPrintOptions
+import com.mobileslicer.printerconnection.bambuLanPrintOptions
+import com.mobileslicer.printerconnection.connectionCapabilities
 import com.mobileslicer.printerconnection.PrinterUploadAction
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -75,12 +75,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RangeSlider
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -150,17 +150,42 @@ import kotlinx.coroutines.withContext
 internal fun PrinterSendSheet(
     sending: Boolean,
     suggestedFileName: String,
-    supportsUploadAndStart: Boolean,
-    supportsQueue: Boolean,
-    onUpload: (String) -> Unit,
-    onUploadAndStart: (String) -> Unit,
-    onQueue: (String) -> Unit,
+    printerProfile: PrinterProfile,
+    onUpload: (String, BambuLanPrintOptions?) -> Unit,
+    onUploadAndStart: (String, BambuLanPrintOptions?) -> Unit,
+    onQueue: (String, BambuLanPrintOptions?) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val capabilities = printerProfile.connectionCapabilities()
+    val defaultBambuOptions = printerProfile.bambuLanPrintOptions()
     var remoteFileName by rememberSaveable(suggestedFileName) {
         mutableStateOf(suggestedFileName.toPrinterUploadFileName())
     }
+    var bambuBedType by rememberSaveable(printerProfile.id) { mutableStateOf(defaultBambuOptions.bedType) }
+    var bambuUseAms by rememberSaveable(printerProfile.id) { mutableStateOf(defaultBambuOptions.useAms) }
+    var bambuAmsMapping by rememberSaveable(printerProfile.id) { mutableStateOf(defaultBambuOptions.amsMapping) }
+    var bambuNozzleMapping by rememberSaveable(printerProfile.id) { mutableStateOf(defaultBambuOptions.nozzleMapping) }
+    var bambuBedLeveling by rememberSaveable(printerProfile.id) { mutableStateOf(defaultBambuOptions.bedLeveling) }
+    var bambuFlowCalibration by rememberSaveable(printerProfile.id) { mutableStateOf(defaultBambuOptions.flowCalibration) }
+    var bambuVibrationCalibration by rememberSaveable(printerProfile.id) { mutableStateOf(defaultBambuOptions.vibrationCalibration) }
+    var bambuTimelapse by rememberSaveable(printerProfile.id) { mutableStateOf(defaultBambuOptions.timelapse) }
+    var showBambuAdvanced by rememberSaveable(printerProfile.id) { mutableStateOf(false) }
     val finalRemoteFileName = remoteFileName.toPrinterUploadFileName()
+    fun currentBambuOptions(): BambuLanPrintOptions? =
+        if (printerProfile.printHostType == PrintHostType.BambuLan) {
+            BambuLanPrintOptions(
+                bedType = bambuBedType.trim(),
+                useAms = bambuUseAms,
+                amsMapping = bambuAmsMapping.trim(),
+                nozzleMapping = bambuNozzleMapping.trim(),
+                bedLeveling = bambuBedLeveling,
+                flowCalibration = bambuFlowCalibration,
+                vibrationCalibration = bambuVibrationCalibration,
+                timelapse = bambuTimelapse
+            )
+        } else {
+            null
+        }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = appCardColor()
@@ -184,9 +209,45 @@ internal fun PrinterSendSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            if (supportsUploadAndStart) {
+            if (printerProfile.printHostType == PrintHostType.BambuLan) {
+                OutlinedTextField(
+                    value = bambuBedType,
+                    onValueChange = { bambuBedType = it },
+                    label = { Text("Bed type") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                BambuSendSwitch("Bed leveling", bambuBedLeveling, { bambuBedLeveling = it })
+                TextButton(
+                    onClick = { showBambuAdvanced = !showBambuAdvanced },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (showBambuAdvanced) "Hide Bambu options" else "Bambu options")
+                }
+                if (showBambuAdvanced) {
+                    BambuSendSwitch("Use AMS", bambuUseAms, { bambuUseAms = it })
+                    BambuSendSwitch("Flow calibration", bambuFlowCalibration, { bambuFlowCalibration = it })
+                    BambuSendSwitch("Vibration calibration", bambuVibrationCalibration, { bambuVibrationCalibration = it })
+                    BambuSendSwitch("Timelapse", bambuTimelapse, { bambuTimelapse = it })
+                    OutlinedTextField(
+                        value = bambuAmsMapping,
+                        onValueChange = { bambuAmsMapping = it },
+                        label = { Text("AMS mapping") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = bambuNozzleMapping,
+                        onValueChange = { bambuNozzleMapping = it },
+                        label = { Text("Nozzle mapping") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+            if (capabilities.canUploadAndStart) {
                 Button(
-                    onClick = { onUploadAndStart(finalRemoteFileName) },
+                    onClick = { onUploadAndStart(finalRemoteFileName, currentBambuOptions()) },
                     enabled = !sending && finalRemoteFileName.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp)
@@ -195,16 +256,16 @@ internal fun PrinterSendSheet(
                 }
             }
             Button(
-                onClick = { onUpload(finalRemoteFileName) },
+                onClick = { onUpload(finalRemoteFileName, currentBambuOptions()) },
                 enabled = !sending && finalRemoteFileName.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Text("Upload Only")
             }
-            if (supportsQueue) {
+            if (capabilities.canQueue) {
                 Button(
-                    onClick = { onQueue(finalRemoteFileName) },
+                    onClick = { onQueue(finalRemoteFileName, currentBambuOptions()) },
                     enabled = !sending && finalRemoteFileName.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp)
@@ -220,6 +281,28 @@ internal fun PrinterSendSheet(
                 Text("Cancel")
             }
         }
+    }
+}
+
+@Composable
+private fun BambuSendSwitch(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = appBodyColor(), style = MaterialTheme.typography.bodyMedium)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
     }
 }
 

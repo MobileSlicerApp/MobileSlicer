@@ -127,6 +127,11 @@ internal object NativeEngineCalls {
             NativeEngineBridge.nativeWriteGcodeToFile(handle.raw, path)
         }
 
+    fun writeBambuGcode3mfToFile(handle: NativeEngineHandle, path: String): NativeEngineCallResult =
+        booleanCall(handle, "nativeWriteBambuGcode3mfToFile") {
+            NativeEngineBridge.nativeWriteBambuGcode3mfToFile(handle.raw, path)
+        }
+
     fun getGcodeSummary(handle: NativeEngineHandle): String? =
         NativeEngineBridge.nativeGetGcodeSummary(handle.raw)
 

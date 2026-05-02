@@ -106,7 +106,7 @@ internal class OctoKlipperConnectionClient(
                 val startResult = sendMoonrakerGcode(
                     baseUrl = candidate,
                     headers = profile.authHeaders(PrinterProtocol.Moonraker),
-                    gcode = "SDCARD_PRINT_FILE FILENAME=$remoteFileName"
+                    gcode = "SDCARD_PRINT_FILE FILENAME=${remoteFileName.moonrakerFilenameArgument()}"
                 )
                 if (!startResult.isSuccess) {
                     return PrinterConnectionResult(false, "Start failed", startResult.errorMessage ?: "File uploaded, but print did not start.")
@@ -128,7 +128,7 @@ internal class OctoKlipperConnectionClient(
             )
             val moonrakerBody = moonraker.body
             if (moonraker.isSuccess && moonrakerBody != null) {
-                return PrinterConnectionResult(true, "Printer status", moonrakerStatusLine(moonrakerBody))
+                return moonrakerStatusResult(moonrakerBody)
             }
             failures += "Moonraker ${safeDisplayUrl(candidate)}: ${moonraker.errorMessage ?: "no response"}"
 
@@ -139,7 +139,7 @@ internal class OctoKlipperConnectionClient(
             )
             val octoJobBody = octoJob.body
             if (octoJob.isSuccess && octoJobBody != null) {
-                return PrinterConnectionResult(true, "Printer status", octoPrintStatusLine(octoJobBody))
+                return octoPrintStatusResult(octoJobBody)
             }
             failures += "OctoPrint ${safeDisplayUrl(candidate)}: ${octoJob.errorMessage ?: "no response"}"
         }
@@ -156,36 +156,106 @@ internal class OctoKlipperConnectionClient(
         )
     }
 
-    private fun moonrakerStatusLine(body: String): String {
+    private fun String.moonrakerFilenameArgument(): String {
+        val escaped = replace("\\", "\\\\").replace("\"", "\\\"")
+        return "\"$escaped\""
+    }
+
+    private fun moonrakerStatusResult(body: String): PrinterConnectionResult {
         val status = JSONObject(body)
             .optJSONObject("result")
             ?.optJSONObject("status")
-            ?: return "Moonraker responded."
+            ?: return PrinterConnectionResult(
+                success = true,
+                title = "Printer status",
+                detail = "Moonraker responded.",
+                runtimeStatus = PrinterRuntimeStatus(
+                    reachable = true,
+                    state = PrinterState.Online,
+                    message = "Moonraker responded.",
+                    hostType = "moonraker"
+                )
+            )
         val printStats = status.optJSONObject("print_stats")
         val virtualSdcard = status.optJSONObject("virtual_sdcard")
         val bed = status.optJSONObject("heater_bed")
         val extruder = status.optJSONObject("extruder")
-        return buildList {
-            add("State: ${printStats?.optString("state", "unknown") ?: "unknown"}")
-            printStats?.optString("filename", "")?.takeIf { it.isNotBlank() }?.let { add("File: $it") }
-            virtualSdcard?.optDouble("progress", Double.NaN)
-                ?.takeIf { !it.isNaN() }
-                ?.let { add("Progress: ${formatPercent(it)}") }
-            extruder?.let { add("Nozzle: ${formatTemperature(it.optDouble("temperature", Double.NaN))}") }
-            bed?.let { add("Bed: ${formatTemperature(it.optDouble("temperature", Double.NaN))}") }
-        }.joinToString(" • ")
+        val rawState = printStats?.optString("state", "unknown") ?: "unknown"
+        val progress = virtualSdcard?.optDouble("progress", Double.NaN)
+            ?.takeIf { !it.isNaN() }
+            ?.let { (it.coerceIn(0.0, 1.0) * 100.0).toInt() }
+        val currentFile = printStats?.optString("filename", "")?.takeIf { it.isNotBlank() }
+        val temperatures = buildList {
+            extruder?.toPrinterTemperature("Nozzle")?.let { add(it) }
+            bed?.toPrinterTemperature("Bed")?.let { add(it) }
+        }
+        val runtimeStatus = PrinterRuntimeStatus(
+            reachable = true,
+            state = rawState.toPrinterState(),
+            message = rawState,
+            progressPercent = progress,
+            temperatures = temperatures,
+            currentFile = currentFile,
+            hostType = "moonraker"
+        )
+        return PrinterConnectionResult(
+            success = true,
+            title = "Printer status",
+            detail = runtimeStatus.toStatusLine(rawState),
+            runtimeStatus = runtimeStatus
+        )
     }
 
-    private fun octoPrintStatusLine(body: String): String {
+    private fun octoPrintStatusResult(body: String): PrinterConnectionResult {
         val json = JSONObject(body)
-        val state = json.optString("state", "unknown")
+        val rawState = json.optString("state", "unknown")
         val fileName = json.optJSONObject("job")?.optJSONObject("file")?.optString("name", "").orEmpty()
-        val progress = json.optJSONObject("progress")?.optDouble("completion", Double.NaN) ?: Double.NaN
-        return buildList {
-            add("State: $state")
-            if (fileName.isNotBlank()) add("File: $fileName")
-            if (!progress.isNaN()) add("Progress: ${formatPercent(progress / 100.0)}")
+        val progress = json.optJSONObject("progress")
+            ?.optDouble("completion", Double.NaN)
+            ?.takeIf { !it.isNaN() }
+            ?.let { it.coerceIn(0.0, 100.0).toInt() }
+        val runtimeStatus = PrinterRuntimeStatus(
+            reachable = true,
+            state = rawState.toPrinterState(),
+            message = rawState,
+            progressPercent = progress,
+            currentFile = fileName.ifBlank { null },
+            hostType = "octoprint"
+        )
+        return PrinterConnectionResult(
+            success = true,
+            title = "Printer status",
+            detail = runtimeStatus.toStatusLine(rawState),
+            runtimeStatus = runtimeStatus
+        )
+    }
+
+    private fun JSONObject.toPrinterTemperature(label: String): PrinterTemperature? {
+        val current = optDouble("temperature", Double.NaN).takeIf { !it.isNaN() } ?: return null
+        val target = optDouble("target", Double.NaN).takeIf { !it.isNaN() }
+        return PrinterTemperature(label = label, currentCelsius = current, targetCelsius = target)
+    }
+
+    private fun PrinterRuntimeStatus.toStatusLine(rawState: String): String =
+        buildList {
+            add("State: ${rawState.ifBlank { "unknown" }}")
+            currentFile?.takeIf { it.isNotBlank() }?.let { add("File: $it") }
+            progressPercent?.let { add("Progress: ${it.coerceIn(0, 100)}%") }
+            temperatures.forEach { temperature ->
+                add("${temperature.label}: ${formatTemperature(temperature.currentCelsius)}")
+            }
         }.joinToString(" • ")
+
+    private fun String.toPrinterState(): PrinterState {
+        val lowered = lowercase()
+        return when {
+            "printing" in lowered || lowered == "printing" || lowered == "print" -> PrinterState.Printing
+            "paused" in lowered || lowered == "pause" -> PrinterState.Paused
+            "standby" in lowered || "idle" in lowered || "operational" in lowered || "ready" in lowered -> PrinterState.Idle
+            "offline" in lowered || "error" in lowered || "shutdown" in lowered -> PrinterState.Offline
+            "online" in lowered || "connected" in lowered -> PrinterState.Online
+            else -> PrinterState.Unknown
+        }
     }
 
     private fun successfulUpload(action: PrinterUploadAction, remoteFileName: String): PrinterConnectionResult {

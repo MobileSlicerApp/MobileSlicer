@@ -36,6 +36,7 @@ import com.mobileslicer.profiles.activeConfiguration
 import com.mobileslicer.profiles.toNativeSliceConfigJson
 import com.mobileslicer.printerconnection.PrinterConnectionChoicesResult
 import com.mobileslicer.printerconnection.PrinterConnectionResult
+import com.mobileslicer.printerconnection.BambuLanPrintOptions
 import com.mobileslicer.printerconnection.PrinterUploadAction
 import com.mobileslicer.printerconnection.SimplyPrintOAuthResult
 import com.mobileslicer.calibration.CalibrationJob
@@ -196,7 +197,8 @@ internal data class PrinterUploadRequest(
     val gcodeFilePath: String,
     val remoteFileName: String,
     val printerProfile: PrinterProfile,
-    val uploadAction: PrinterUploadAction
+    val uploadAction: PrinterUploadAction,
+    val bambuOptions: BambuLanPrintOptions? = null
 )
 
 internal fun printerUploadStartStatus(request: PrinterUploadRequest): String =
@@ -219,7 +221,7 @@ internal fun startPrinterUploadRequest(
     request: PrinterUploadRequest,
     coroutineScope: CoroutineScope,
     context: Context,
-    onSendToPrinterRequested: suspend (String, String, PrinterProfile, PrinterUploadAction, (Int) -> Unit) -> PrinterConnectionResult,
+    onSendToPrinterRequested: suspend (String, String, PrinterProfile, PrinterUploadAction, BambuLanPrintOptions?, (Int) -> Unit) -> PrinterConnectionResult,
     setSendInProgress: (Boolean) -> Unit,
     isSendInProgress: () -> Boolean,
     setProgress: (Int?) -> Unit,
@@ -238,7 +240,8 @@ internal fun startPrinterUploadRequest(
                 request.gcodeFilePath,
                 request.remoteFileName,
                 request.printerProfile,
-                request.uploadAction
+                request.uploadAction,
+                request.bambuOptions
             ) { progress ->
                 setProgress(progress)
                 setWorkspaceStatus(printerUploadProgressStatus(request.remoteFileName, progress))

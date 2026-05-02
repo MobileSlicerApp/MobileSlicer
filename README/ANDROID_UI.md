@@ -311,7 +311,8 @@ compatibility gating:
   * kept control-semantics path on this same renderer:
     * pinch direction stays in the corrected state so pinch-out zooms in and pinch-in zooms out
     * single-finger drag start accumulates from touch-down so orbit engages more reliably on slower drags
-    * two-finger pan stays camera-relative instead of falling back to fixed world-axis movement
+    * two-finger gestures now use dead-zone/dominance locking so a gesture becomes either camera-relative pan or pinch zoom, not both at once
+    * two-finger double-tap resets orbit, pan, and zoom; the default/reset view is front-on with yaw `-90`, pitch `42`, and zoom `0.55x`
   * latest workspace cleanup on the current path:
     * top bar now foregrounds the selected printer and exact bed size instead of a generic workspace title
     * bottom overlay now reads as a tighter dock with fewer, smaller badges and a more compact summary

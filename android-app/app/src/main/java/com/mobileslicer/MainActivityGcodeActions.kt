@@ -113,6 +113,7 @@ import com.mobileslicer.printerconnection.PrinterConnectionRepository
 import com.mobileslicer.printerconnection.PrinterConnectionChoicesResult
 import com.mobileslicer.printerconnection.PrinterConnectionResult
 import com.mobileslicer.printerconnection.PrinterDiscoveryRepository
+import com.mobileslicer.printerconnection.BambuLanPrintOptions
 import com.mobileslicer.printerconnection.PrinterUploadAction
 import com.mobileslicer.printerconnection.SimplyPrintOAuthClient
 import com.mobileslicer.printerconnection.SimplyPrintOAuthResult
@@ -120,6 +121,7 @@ import com.mobileslicer.profiles.ProfileStore
 import com.mobileslicer.profiles.ProfileStoreRepository
 import com.mobileslicer.profiles.PrintHostType
 import com.mobileslicer.profiles.PrinterProfile
+import com.mobileslicer.printerconnection.toBambuPackageFileName
 import com.mobileslicer.storage.AppPreferenceStore
 import com.mobileslicer.storage.GCODE_MIME_TYPE
 import com.mobileslicer.storage.PreparedViewerMeshCache
@@ -242,14 +244,45 @@ internal suspend fun MainActivity.sendGcodeToPrinter(
         remoteFileName: String,
         printerProfile: PrinterProfile,
         uploadAction: PrinterUploadAction,
+        bambuOptions: BambuLanPrintOptions? = null,
         onProgress: (Int) -> Unit
     ): PrinterConnectionResult = withContext(Dispatchers.IO) {
         val source = File(gcodeFilePath)
+        val uploadSource = if (
+            printerProfile.printHostType == PrintHostType.BambuLan &&
+            !source.name.endsWith(".gcode.3mf", ignoreCase = true) &&
+            !source.name.endsWith(".3mf", ignoreCase = true)
+        ) {
+            val handle = NativeEngineHandle.fromRaw(ensureEngine())
+                ?: return@withContext PrinterConnectionResult(
+                    false,
+                    "Send failed",
+                    "Native engine is unavailable for Bambu package export."
+                )
+            val packageFile = File(cacheDir, "latest-send-${remoteFileName.toBambuPackageFileName()}")
+            cleanupGeneratedGcodeCache(retain = packageFile)
+            val exportResult = NativeEngineCalls.writeBambuGcode3mfToFile(handle, packageFile.absolutePath)
+            if (exportResult !is NativeEngineCallResult.Success || !packageFile.exists() || packageFile.length() <= 0L) {
+                val nativeError = (exportResult as? NativeEngineCallResult.Failure)
+                    ?.error
+                    ?.message
+                    .orEmpty()
+                return@withContext PrinterConnectionResult(
+                    false,
+                    "Bambu package export failed",
+                    nativeError.ifBlank { "Could not export the Orca/Bambu .gcode.3mf package." }
+                )
+            }
+            packageFile
+        } else {
+            source
+        }
         printerConnectionRepository.uploadGcode(
             profile = printerProfile,
-            file = source,
+            file = uploadSource,
             remoteFileName = remoteFileName,
             action = uploadAction,
+            bambuOptions = bambuOptions,
             onProgress = onProgress
         )
     }

@@ -27,6 +27,7 @@ const char* orca_get_gcode_summary(OrcaEngine* engine);
 const char* orca_get_enriched_gcode_summary(OrcaEngine* engine);
 const char* orca_get_slice_metrics(OrcaEngine* engine);
 int orca_write_gcode_to_file(OrcaEngine* engine, const char* path);
+int orca_write_bambu_gcode_3mf_to_file(OrcaEngine* engine, const char* path);
 const char* orca_get_last_error(OrcaEngine* engine);
 
 OrcaGcodeViewer* orca_gcode_viewer_create(void);

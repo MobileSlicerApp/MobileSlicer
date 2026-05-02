@@ -5,8 +5,8 @@ import android.util.Log
 import com.mobileslicer.appBackgroundGradient
 import com.mobileslicer.profiles.ActiveSlicerConfiguration
 import com.mobileslicer.profiles.FilamentProfile
-import com.mobileslicer.profiles.PrintHostType
 import com.mobileslicer.profiles.PrinterProfile
+import com.mobileslicer.printerconnection.BambuLanPrintOptions
 import com.mobileslicer.printerconnection.PrinterUploadAction
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -114,7 +114,7 @@ internal fun WorkspaceScreen(
     onFirstVisiblePreviewFrame: () -> Unit,
     onSlice: () -> Unit,
     onExport: () -> Unit,
-    onSendToPrinter: (PrinterUploadAction, String) -> Unit,
+    onSendToPrinter: (PrinterUploadAction, String, BambuLanPrintOptions?) -> Unit,
     onOpenPrinter: () -> Unit,
     onPrinterStatus: suspend (PrinterProfile) -> String,
     onShare: () -> Unit,
@@ -581,20 +581,18 @@ internal fun WorkspaceScreen(
             PrinterSendSheet(
                 sending = sendToPrinterInProgress,
                 suggestedFileName = currentGcodeFileName,
-                supportsUploadAndStart = selectedPrinter.printHostType != PrintHostType.SimplyPrint,
-                supportsQueue = selectedPrinter.printHostType == PrintHostType.PrusaConnect ||
-                    selectedPrinter.printHostType == PrintHostType.SimplyPrint,
-                onUpload = { remoteFileName ->
+                printerProfile = selectedPrinter,
+                onUpload = { remoteFileName, bambuOptions ->
                     showPrinterSendSheet = false
-                    onSendToPrinter(PrinterUploadAction.UploadOnly, remoteFileName)
+                    onSendToPrinter(PrinterUploadAction.UploadOnly, remoteFileName, bambuOptions)
                 },
-                onUploadAndStart = { remoteFileName ->
+                onUploadAndStart = { remoteFileName, bambuOptions ->
                     showPrinterSendSheet = false
-                    onSendToPrinter(PrinterUploadAction.UploadAndStart, remoteFileName)
+                    onSendToPrinter(PrinterUploadAction.UploadAndStart, remoteFileName, bambuOptions)
                 },
-                onQueue = { remoteFileName ->
+                onQueue = { remoteFileName, bambuOptions ->
                     showPrinterSendSheet = false
-                    onSendToPrinter(PrinterUploadAction.Queue, remoteFileName)
+                    onSendToPrinter(PrinterUploadAction.Queue, remoteFileName, bambuOptions)
                 },
                 onDismiss = { showPrinterSendSheet = false }
             )

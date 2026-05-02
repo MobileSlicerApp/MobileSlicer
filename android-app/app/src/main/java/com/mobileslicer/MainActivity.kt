@@ -286,8 +286,8 @@ class MainActivity : ComponentActivity() {
                             )
                         },
                         onExportRequested = { uri, gcodeFilePath -> exportGcodeToUri(uri, gcodeFilePath) },
-                        onSendToPrinterRequested = { gcodeFilePath, remoteFileName, printerProfile, uploadAction, onProgress ->
-                            sendGcodeToPrinter(gcodeFilePath, remoteFileName, printerProfile, uploadAction, onProgress)
+                        onSendToPrinterRequested = { gcodeFilePath, remoteFileName, printerProfile, uploadAction, bambuOptions, onProgress ->
+                            sendGcodeToPrinter(gcodeFilePath, remoteFileName, printerProfile, uploadAction, bambuOptions, onProgress)
                         },
                         onTestPrinterConnectionRequested = { printerProfile ->
                             testPrinterConnection(printerProfile)

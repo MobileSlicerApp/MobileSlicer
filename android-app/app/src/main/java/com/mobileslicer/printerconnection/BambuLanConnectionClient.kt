@@ -21,23 +21,28 @@ internal class BambuLanConnectionClient(
         }
         val mqtt = canOpenTcp(host, 8883, 2_000)
         val transfer = canOpenTcp(host, 990, 2_000)
-        return if (mqtt || transfer) {
+        return if (mqtt && transfer) {
             PrinterConnectionResult(
                 true,
                 "Connection successful",
                 buildList {
                     add("Bambu LAN host reachable at $host.")
                     if (serial.isNotBlank()) add("Device ID: $serial")
-                    add(if (mqtt) "MQTT port reachable" else "MQTT port not reachable")
-                    add(if (transfer) "FTP/FTPS port reachable" else "FTP/FTPS port not reachable")
-                    add("Upload/start is intentionally disabled pending hardware validation.")
+                    add("MQTT port reachable")
+                    add("FTP/FTPS port reachable")
+                    add("Upload-only and upload-and-start can use the Bambu LAN device agent.")
                 }.joinToString(" • ")
             )
         } else {
             PrinterConnectionResult(
                 false,
-                "Connection failed",
-                "Could not reach Bambu LAN MQTT or FTP/FTPS ports at $host. Confirm LAN mode, IP address, and access code."
+                "Connection incomplete",
+                buildList {
+                    add("Bambu LAN host was found at $host, but required local services were not both reachable.")
+                    add(if (mqtt) "MQTT port reachable" else "MQTT port not reachable")
+                    add(if (transfer) "FTP/FTPS port reachable" else "FTP/FTPS port not reachable")
+                    add("Upload requires FTP/FTPS; upload-and-start also requires MQTT. Confirm LAN mode, IP address, and access code.")
+                }.joinToString(" • ")
             )
         }
     }

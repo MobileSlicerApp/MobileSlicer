@@ -8,6 +8,7 @@
 #include "libslic3r/Config.hpp"
 #include "libslic3r/Exception.hpp"
 #include "libslic3r/Format/STL.hpp"
+#include "libslic3r/Format/bbs_3mf.hpp"
 #include "libslic3r/Layer.hpp"
 #include "libslic3r/Model.hpp"
 #include "libslic3r/Print.hpp"
@@ -4376,6 +4377,108 @@ extern "C" int orca_write_gcode_to_file(OrcaEngine* engine, const char* path)
     } catch (...) {
         set_last_error(engine, "unknown exception");
         log_native_error("orca_write_gcode_to_file", "unknown exception");
+        return ORCA_ERROR_SLICE;
+    }
+}
+
+extern "C" int orca_write_bambu_gcode_3mf_to_file(OrcaEngine* engine, const char* path)
+{
+    if (engine == nullptr || path == nullptr || path[0] == '\0') {
+        return ORCA_ERROR_INVALID_ARGUMENT;
+    }
+    std::lock_guard<std::recursive_mutex> lock(engine->impl.mutex);
+    if (!engine->impl.model.has_value()) {
+        set_last_error(engine, "no model loaded");
+        return ORCA_ERROR_LOAD_MODEL;
+    }
+    if (engine->impl.gcode_path.empty() && engine->impl.gcode.empty()) {
+        set_last_error(engine, "no generated G-code is available");
+        return ORCA_ERROR_SLICE;
+    }
+
+    try {
+        if (engine->impl.gcode_path.empty()) {
+            const auto temp_gcode_path = make_temp_gcode_path();
+            std::ofstream output(temp_gcode_path, std::ios::binary | std::ios::trunc);
+            if (!output) {
+                set_last_error(engine, "unable to open temporary G-code path");
+                return ORCA_ERROR_SLICE;
+            }
+            output.write(engine->impl.gcode.data(), static_cast<std::streamsize>(engine->impl.gcode.size()));
+            if (!output) {
+                set_last_error(engine, "unable to write temporary G-code file");
+                return ORCA_ERROR_SLICE;
+            }
+            engine->impl.gcode_path = temp_gcode_path;
+            engine->impl.gcode_path_owned = true;
+        }
+
+        Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
+        config.set_deserialize_strict("gcode_comments", "1");
+        config.set_deserialize_strict("start_gcode", "");
+        config.set_deserialize_strict("machine_start_gcode", "");
+        config.set_deserialize_strict("machine_end_gcode", "");
+        apply_json_overrides(engine->impl.config_json, config);
+        apply_android_runtime_gcode_baseline(config);
+
+        Slic3r::PlateDataPtrs plate_data_list;
+        struct PlateDataListGuard {
+            Slic3r::PlateDataPtrs& list;
+            ~PlateDataListGuard()
+            {
+                Slic3r::release_PlateData_list(list);
+            }
+        } plate_data_guard{plate_data_list};
+
+        auto* plate = new Slic3r::PlateData();
+        plate->plate_index = 0;
+        plate->plate_name = "Plate 1";
+        plate->gcode_file = engine->impl.gcode_path.string();
+        plate->is_sliced_valid = true;
+        plate->locked = false;
+        plate->config.apply(config);
+        for (size_t object_index = 0; object_index < engine->impl.model->objects.size(); ++object_index) {
+            const Slic3r::ModelObject* object = engine->impl.model->objects[object_index];
+            if (object == nullptr) {
+                continue;
+            }
+            const size_t instance_count = std::max<size_t>(1, object->instances.size());
+            for (size_t instance_index = 0; instance_index < instance_count; ++instance_index) {
+                plate->objects_and_instances.emplace_back(
+                    static_cast<int>(object_index),
+                    static_cast<int>(instance_index)
+                );
+            }
+        }
+        plate_data_list.push_back(plate);
+
+        Slic3r::StoreParams store_params;
+        store_params.path = path;
+        store_params.model = &(*engine->impl.model);
+        store_params.plate_data_list = plate_data_list;
+        store_params.export_plate_idx = 0;
+        store_params.config = &config;
+        store_params.strategy =
+            Slic3r::SaveStrategy::Silence |
+            Slic3r::SaveStrategy::SplitModel |
+            Slic3r::SaveStrategy::WithGcode |
+            Slic3r::SaveStrategy::SkipAuxiliary |
+            Slic3r::SaveStrategy::Zip64;
+
+        if (!Slic3r::store_bbs_3mf(store_params)) {
+            set_last_error(engine, "Bambu .gcode.3mf export failed");
+            return ORCA_ERROR_SLICE;
+        }
+
+        clear_last_error(engine);
+        return ORCA_SUCCESS;
+    } catch (const std::exception& exception) {
+        set_last_error(engine, exception.what());
+        log_native_error("orca_write_bambu_gcode_3mf_to_file", exception.what());
+        return ORCA_ERROR_SLICE;
+    } catch (...) {
+        set_last_error(engine, "unknown exception");
+        log_native_error("orca_write_bambu_gcode_3mf_to_file", "unknown exception");
         return ORCA_ERROR_SLICE;
     }
 }

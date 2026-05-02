@@ -688,6 +688,7 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
         }
     };
 
+#ifndef ORCA_ANDROID_BBS_EXPORT_ONLY
     class _BBS_3MF_Importer : public _BBS_3MF_Base
     {
         typedef std::pair<std::string, int> Id; // BBS: encrypt
@@ -3893,6 +3894,8 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
         return true;
     }
 
+#endif // ORCA_ANDROID_BBS_EXPORT_ONLY
+
     struct TextConfigurationSerialization
     {
     public:
@@ -3928,6 +3931,11 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
         static EmbossShape read_old(const char **attributes, unsigned int num_attributes);
     };
 
+    // Definition of read/write method for EmbossShape
+    static void                       to_xml(std::stringstream &stream, const EmbossShape &es, const ModelVolume &volume, mz_zip_archive &archive,bool export_full_path);
+    static std::optional<EmbossShape> read_emboss_shape(const char **attributes, unsigned int num_attributes);
+
+#ifndef ORCA_ANDROID_BBS_EXPORT_ONLY
     bool _BBS_3MF_Importer::_handle_start_text_configuration(const char **attributes, unsigned int num_attributes)
     {
         IdToMetadataMap::iterator object = m_objects_metadata.find(m_curr_config.object_id);
@@ -3952,10 +3960,6 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
         volume.shape_configuration = TextConfigurationSerialization::read_old(attributes, num_attributes);
         return true;
     }
-
-    // Definition of read/write method for EmbossShape
-    static void                       to_xml(std::stringstream &stream, const EmbossShape &es, const ModelVolume &volume, mz_zip_archive &archive,bool export_full_path);
-    static std::optional<EmbossShape> read_emboss_shape(const char **attributes, unsigned int num_attributes);
 
     bool _BBS_3MF_Importer::_handle_start_shape_configuration(const char **attributes, unsigned int num_attributes)
     {
@@ -5609,6 +5613,8 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
         return true;
     }
 
+
+#endif // ORCA_ANDROID_BBS_EXPORT_ONLY
 
     class _BBS_3MF_Exporter : public _BBS_3MF_Base
     {
@@ -8271,6 +8277,7 @@ static void handle_legacy_project_loaded(unsigned int version_project_file, Dyna
     }
 }
 
+#ifndef ORCA_ANDROID_BBS_EXPORT_ONLY
 // backup backgroud thread to dispatch tasks and coperate with ui thread
 class _BBS_Backup_Manager
 {
@@ -8630,9 +8637,11 @@ private:
     std::vector<std::pair<ModelObject*, size_t>> m_gaurd_objects;
     boost::thread m_thread;
 };
+#endif // ORCA_ANDROID_BBS_EXPORT_ONLY
 
 
 //BBS: add plate data list related logic
+#ifndef ORCA_ANDROID_BBS_EXPORT_ONLY
 bool load_bbs_3mf(const char* path, DynamicPrintConfig* config, ConfigSubstitutionContext* config_substitutions, Model* model, PlateDataPtrs* plate_data_list, std::vector<Preset*>* project_presets,
                     bool* is_bbl_3mf, Semver* file_version, Import3mfProgressFn proFn, LoadStrategy strategy, BBLProject *project, int plate_id)
 {
@@ -8666,6 +8675,41 @@ bool load_gcode_3mf_from_stream(std::istream &data, DynamicPrintConfig *config, 
     importer.log_errors();
     return res;
 }
+#else
+bool load_bbs_3mf(const char* path, DynamicPrintConfig* config, ConfigSubstitutionContext* config_substitutions, Model* model, PlateDataPtrs* plate_data_list, std::vector<Preset*>* project_presets,
+                    bool* is_bbl_3mf, Semver* file_version, Import3mfProgressFn proFn, LoadStrategy strategy, BBLProject *project, int plate_id)
+{
+    (void)path;
+    (void)config;
+    (void)config_substitutions;
+    (void)model;
+    (void)plate_data_list;
+    (void)project_presets;
+    (void)is_bbl_3mf;
+    (void)file_version;
+    (void)proFn;
+    (void)strategy;
+    (void)project;
+    (void)plate_id;
+    return false;
+}
+
+std::string bbs_3mf_get_thumbnail(const char *path)
+{
+    (void)path;
+    return {};
+}
+
+bool load_gcode_3mf_from_stream(std::istream &data, DynamicPrintConfig *config, Model *model, PlateDataPtrs *plate_data_list, Semver *file_version)
+{
+    (void)data;
+    (void)config;
+    (void)model;
+    (void)plate_data_list;
+    (void)file_version;
+    return false;
+}
+#endif
 
 bool store_bbs_3mf(StoreParams& store_params)
 {
@@ -8698,6 +8742,7 @@ void release_PlateData_list(PlateDataPtrs& plate_data_list)
 
 // backup interface
 
+#ifndef ORCA_ANDROID_BBS_EXPORT_ONLY
 void save_object_mesh(ModelObject& object)
 {
     if (!object.get_model() || !object.get_model()->is_need_backup())
@@ -8795,6 +8840,21 @@ SaveObjectGaurd::~SaveObjectGaurd()
 {
     _BBS_Backup_Manager::get().pop_object_gaurd();
 }
+#else
+void save_object_mesh(ModelObject& object) { (void)object; }
+void delete_object_mesh(ModelObject& object) { (void)object; }
+void backup_soon() {}
+void remove_backup(Model& model, bool removeAll) { (void)model; (void)removeAll; }
+void set_backup_interval(long interval) { (void)interval; }
+void set_backup_callback(std::function<void(int)> callback) { (void)callback; }
+void run_backup_ui_tasks() {}
+bool has_restore_data(std::string& path, std::string& origin) { (void)path; origin = "<lock>"; return false; }
+void put_other_changes() {}
+void clear_other_changes(bool backup) { (void)backup; }
+bool has_other_changes(bool backup) { (void)backup; return false; }
+SaveObjectGaurd::SaveObjectGaurd(ModelObject& object) { (void)object; }
+SaveObjectGaurd::~SaveObjectGaurd() = default;
+#endif
 
 namespace{
 

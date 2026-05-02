@@ -212,6 +212,10 @@ internal class PrinterConnectionRepository {
     private val bambuLanClient = BambuLanConnectionClient(
         canOpenTcp = { host, port, timeoutMs -> canOpenTcp(host, port, timeoutMs) }
     )
+    private val bambuLanAgent = BambuLanPrinterAgent(
+        transferClient = BambuLanFtpsTransferClient(),
+        mqttClient = BambuLanMqttTransportClient()
+    )
     private val prusaClient = PrusaConnectionClient(
         requestTextBody = { url, method, headers -> requestTextBody(url, method, headers) },
         uploadMultipart = { url, headers, fields, file, fileFieldName, remoteFileName, onProgress ->
@@ -262,9 +266,9 @@ internal class PrinterConnectionRepository {
         }
 
         when (profile.printHostType) {
-            PrintHostType.Obico -> obicoClient.browsePrinters(profile, baseUrl)
-            PrintHostType.Repetier -> repetierClient.browsePrinters(profile, baseUrl)
-            PrintHostType.PrusaLink -> prusaClient.browseLinkStorage(profile, baseUrl)
+            PrintHostType.Obico -> obicoClient.browsePrinters(profile, baseUrl).withTargetType(PrinterBrowseTargetType.PrinterTarget)
+            PrintHostType.Repetier -> repetierClient.browsePrinters(profile, baseUrl).withTargetType(PrinterBrowseTargetType.PrinterTarget)
+            PrintHostType.PrusaLink -> prusaClient.browseLinkStorage(profile, baseUrl).withTargetType(PrinterBrowseTargetType.StoragePath)
             else -> PrinterConnectionChoicesResult(
                 false,
                 "Picker unavailable",
@@ -282,7 +286,7 @@ internal class PrinterConnectionRepository {
         if (profile.printHostType != PrintHostType.Repetier) {
             return@withContext PrinterConnectionChoicesResult(false, "Picker unavailable", "${profile.printHostType.displayLabel} does not expose model groups.")
         }
-        repetierClient.browseGroups(profile, baseUrl)
+        repetierClient.browseGroups(profile, baseUrl).withTargetType(PrinterBrowseTargetType.Group)
     }
 
     suspend fun testConnection(profile: PrinterProfile): PrinterConnectionResult = withContext(Dispatchers.IO) {
@@ -317,6 +321,7 @@ internal class PrinterConnectionRepository {
         file: File,
         remoteFileName: String,
         action: PrinterUploadAction,
+        bambuOptions: BambuLanPrintOptions? = null,
         onProgress: (Int) -> Unit = {}
     ): PrinterConnectionResult = withContext(Dispatchers.IO) {
         if (!file.exists() || file.length() <= 0L) {
@@ -347,11 +352,7 @@ internal class PrinterConnectionRepository {
             PrintHostType.PrusaConnect -> return@withContext prusaClient.uploadConnectGcode(profile, baseUrl, file, remoteFileName, action, onProgress)
             PrintHostType.Obico -> return@withContext obicoClient.uploadGcode(profile, baseUrl, file, remoteFileName, action, onProgress)
             PrintHostType.SimplyPrint -> return@withContext simplyPrintClient.uploadGcode(profile, file, remoteFileName, action, onProgress)
-            PrintHostType.BambuLan -> return@withContext PrinterConnectionResult(
-                false,
-                "Send failed",
-                "Bambu LAN setup is saved, but upload/start is disabled until the Orca MQTT plus FTPS sequence is validated on hardware."
-            )
+            PrintHostType.BambuLan -> return@withContext uploadBambuLanPackage(profile, baseUrl, file, remoteFileName, action, bambuOptions, onProgress)
             PrintHostType.OctoPrint -> Unit
             else -> return@withContext unsupportedHost(profile)
         }
@@ -364,34 +365,71 @@ internal class PrinterConnectionRepository {
             ?: return@withContext PrinterConnectionResult(false, "Status unavailable", "Enter a printer host or IP address.")
         requireAllowedPrinterBaseUrl(baseUrl)?.let { return@withContext it.copy(title = "Status unavailable") }
 
-        when (profile.printHostType) {
-            PrintHostType.Duet -> return@withContext duetClient.fetchStatus(profile, baseUrl)
-            PrintHostType.Repetier -> return@withContext repetierClient.fetchStatus(profile, baseUrl)
-            PrintHostType.Esp3d -> return@withContext esp3dClient.fetchStatus(baseUrl)
-            PrintHostType.CrealityPrint -> return@withContext crealityPrintClient.fetchStatus(profile, baseUrl)
-            PrintHostType.ElegooLink -> return@withContext elegooLinkClient.fetchStatus(profile, baseUrl)
-            PrintHostType.FlashAir -> return@withContext flashAirClient.fetchStatus(baseUrl)
-            PrintHostType.AstroBox -> return@withContext astroBoxClient.fetchStatus(profile, baseUrl)
-            PrintHostType.Mks -> return@withContext mksClient.fetchStatus(profile, baseUrl)
-            PrintHostType.Flashforge -> return@withContext flashforgeClient.fetchStatus(profile, baseUrl)
-            PrintHostType.PrusaLink -> return@withContext prusaClient.fetchLinkStatus(profile, baseUrl)
-            PrintHostType.PrusaConnect -> return@withContext prusaClient.fetchConnectStatus(profile, baseUrl)
-            PrintHostType.Obico -> return@withContext obicoClient.fetchStatus(profile, baseUrl)
-            PrintHostType.SimplyPrint -> return@withContext simplyPrintClient.fetchStatus(profile)
-            PrintHostType.BambuLan -> return@withContext bambuLanClient.testConnection(profile, baseUrl).copy(title = "Printer status")
-            PrintHostType.OctoPrint -> Unit
-            else -> return@withContext unsupportedHost(profile)
+        val result = when (profile.printHostType) {
+            PrintHostType.Duet -> duetClient.fetchStatus(profile, baseUrl)
+            PrintHostType.Repetier -> repetierClient.fetchStatus(profile, baseUrl)
+            PrintHostType.Esp3d -> esp3dClient.fetchStatus(baseUrl)
+            PrintHostType.CrealityPrint -> crealityPrintClient.fetchStatus(profile, baseUrl)
+            PrintHostType.ElegooLink -> elegooLinkClient.fetchStatus(profile, baseUrl)
+            PrintHostType.FlashAir -> flashAirClient.fetchStatus(baseUrl)
+            PrintHostType.AstroBox -> astroBoxClient.fetchStatus(profile, baseUrl)
+            PrintHostType.Mks -> mksClient.fetchStatus(profile, baseUrl)
+            PrintHostType.Flashforge -> flashforgeClient.fetchStatus(profile, baseUrl)
+            PrintHostType.PrusaLink -> prusaClient.fetchLinkStatus(profile, baseUrl)
+            PrintHostType.PrusaConnect -> prusaClient.fetchConnectStatus(profile, baseUrl)
+            PrintHostType.Obico -> obicoClient.fetchStatus(profile, baseUrl)
+            PrintHostType.SimplyPrint -> simplyPrintClient.fetchStatus(profile)
+            PrintHostType.BambuLan -> bambuLanClient.testConnection(profile, baseUrl).copy(title = "Printer status")
+            PrintHostType.OctoPrint -> octoKlipperClient.fetchStatus(profile, baseUrl)
+            else -> unsupportedHost(profile)
         }
-
-        octoKlipperClient.fetchStatus(profile, baseUrl)
+        result.withInferredRuntimeStatus(profile.printHostType)
     }
 
     private fun unsupportedHost(profile: PrinterProfile): PrinterConnectionResult =
         PrinterConnectionResult(
             false,
             "Connection not implemented",
-            "${profile.printHostType.displayLabel} is saved in the profile, but runtime support currently covers Octo/Klipper, PrusaLink, PrusaConnect, Duet, Repetier, ESP3D, CrealityPrint, Elegoo Link, FlashAir, AstroBox, MKS, Flashforge, Obico, SimplyPrint, and guarded Bambu LAN setup only."
+            "${profile.printHostType.displayLabel} is saved in the profile, but runtime support currently covers Octo/Klipper, PrusaLink, PrusaConnect, Duet, Repetier, ESP3D, CrealityPrint, Elegoo Link, FlashAir, AstroBox, MKS, Flashforge, Obico, SimplyPrint, and Bambu LAN."
         )
+
+    private fun uploadBambuLanPackage(
+        profile: PrinterProfile,
+        baseUrl: String,
+        file: File,
+        remoteFileName: String,
+        action: PrinterUploadAction,
+        bambuOptions: BambuLanPrintOptions?,
+        onProgress: (Int) -> Unit
+    ): PrinterConnectionResult {
+        if (action == PrinterUploadAction.Queue) {
+            return PrinterConnectionResult(false, "Send failed", "Bambu LAN does not support queue upload from Mobile Slicer.")
+        }
+        val packageFile = if (file.name.endsWith(".gcode.3mf", ignoreCase = true) || file.name.endsWith(".3mf", ignoreCase = true)) {
+            file
+        } else {
+            return PrinterConnectionResult(
+                false,
+                "Bambu package required",
+                "Bambu LAN printing requires an Orca/Bambu sliced .gcode.3mf package. Slice the plate before sending so Mobile Slicer can export the package through Orca's BBS 3MF exporter."
+            )
+        }
+        val device = bambuLanAgent.deviceConfig(profile, baseUrl)
+            ?: return PrinterConnectionResult(false, "Send failed", "Enter Bambu LAN IP, access code, and device serial/dev id.")
+        val bambuRemoteName = remoteFileName.toBambuPackageFileName()
+        val job = BambuLanPrintJob(
+            taskName = bambuRemoteName.substringBeforeLast(".gcode.3mf", bambuRemoteName),
+            projectName = bambuRemoteName,
+            localFile = packageFile,
+            remoteFileName = bambuRemoteName,
+            options = bambuOptions ?: profile.bambuLanPrintOptions()
+        )
+        return when (action) {
+            PrinterUploadAction.UploadAndStart -> bambuLanAgent.uploadAndStart(device, job, onProgress)
+            PrinterUploadAction.UploadOnly -> bambuLanAgent.uploadOnly(device, job, onProgress)
+            PrinterUploadAction.Queue -> PrinterConnectionResult(false, "Send failed", "Bambu LAN does not support queue upload from Mobile Slicer.")
+        }
+    }
 
     private fun fetchDigestChallenge(targetUrl: String): Map<String, String>? {
         val target = runCatching { URI(targetUrl) }.getOrNull() ?: return null

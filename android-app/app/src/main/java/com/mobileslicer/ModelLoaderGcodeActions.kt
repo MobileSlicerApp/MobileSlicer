@@ -1,6 +1,7 @@
 package com.mobileslicer
 
 import com.mobileslicer.calibration.CalibrationJob
+import com.mobileslicer.printerconnection.BambuLanPrintOptions
 import com.mobileslicer.printerconnection.PrinterUploadAction
 import com.mobileslicer.profiles.PrinterProfile
 import com.mobileslicer.workspace.PlateObject
@@ -80,7 +81,8 @@ internal fun planPrinterUploadRequest(
     calibrationJob: CalibrationJob?,
     remoteFileName: String,
     printerProfile: PrinterProfile,
-    uploadAction: PrinterUploadAction
+    uploadAction: PrinterUploadAction,
+    bambuOptions: BambuLanPrintOptions? = null
 ): PrinterUploadRequest? {
     val path = gcodeFilePath ?: return null
     if (sendToPrinterInProgress) return null
@@ -91,7 +93,8 @@ internal fun planPrinterUploadRequest(
         gcodeFilePath = path,
         remoteFileName = effectiveRemoteFileName,
         printerProfile = printerProfile,
-        uploadAction = uploadAction
+        uploadAction = uploadAction,
+        bambuOptions = bambuOptions
     )
 }
 

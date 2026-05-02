@@ -290,7 +290,13 @@ internal fun OrcaPrinterPreset.toImportedPrinterProfile(
         thumbnailsInternal = resolved.profileConfigString("thumbnails_internal"),
         thumbnailsInternalSwitch = resolved.profileConfigString("thumbnails_internal_switch"),
         remainingTimes = resolved.profileConfigString("remaining_times"),
-        printHostType = PrintHostType.fromConfigValue(resolved.profileConfigString("host_type", PrintHostType.OctoPrint.configValue)),
+        printHostType = inferredOrcaPrintHostType(
+            resolved = resolved,
+            machineModel = machineModel,
+            family = family,
+            profilePath = profilePath,
+            presetName = name
+        ),
         printerAgent = resolved.profileConfigString("printer_agent"),
         printHost = resolved.profileConfigString("print_host"),
         printHostWebUi = resolved.profileConfigString("print_host_webui"),
@@ -302,6 +308,7 @@ internal fun OrcaPrinterPreset.toImportedPrinterProfile(
         printHostUser = resolved.profileConfigString("printhost_user"),
         printHostPassword = resolved.profileConfigString("printhost_password"),
         printHostSslIgnoreRevoke = resolved.profileConfigBoolean("printhost_ssl_ignore_revoke", false),
+        bambuBedType = resolved.profileConfigString("default_bed_type").ifBlank { machineModel.profileConfigString("default_bed_type") },
         timeCost = resolved.profileConfigFloat("time_cost", 0f),
         fanSpeedupTimeSeconds = resolved.profileConfigFloat("fan_speedup_time", 0f),
         fanSpeedupOverhangsOnly = resolved.profileConfigBoolean("fan_speedup_overhangs", true),
@@ -400,4 +407,33 @@ internal fun OrcaPrinterPreset.toImportedPrinterProfile(
         orcaResolvedSourceChains = selectedIndex?.let { listOf(resolvedSourceChains.getOrNull(it).orEmpty()) } ?: resolvedSourceChains,
         availableNozzleDiameters = nozzles
     )
+}
+
+private fun inferredOrcaPrintHostType(
+    resolved: JSONObject,
+    machineModel: JSONObject,
+    family: String,
+    profilePath: String,
+    presetName: String
+): PrintHostType {
+    val explicitHostType = resolved.profileConfigString("host_type")
+    if (explicitHostType.isNotBlank()) {
+        return PrintHostType.fromConfigValue(explicitHostType)
+    }
+    val isBambu = sequenceOf(
+        family,
+        profilePath,
+        presetName,
+        resolved.profileConfigString("printer_agent"),
+        resolved.profileConfigString("printer_model"),
+        resolved.profileConfigString("name"),
+        resolved.profileConfigString("inherits"),
+        machineModel.profileConfigString("printer_model"),
+        machineModel.profileConfigString("name"),
+        machineModel.profileConfigString("inherits")
+    ).any { value ->
+        value.contains("bambu", ignoreCase = true) ||
+            value.contains("bbl", ignoreCase = true)
+    }
+    return if (isBambu) PrintHostType.BambuLan else PrintHostType.OctoPrint
 }

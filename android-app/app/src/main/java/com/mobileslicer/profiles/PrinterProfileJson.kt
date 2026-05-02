@@ -125,6 +125,14 @@ internal fun PrinterProfile.toJson(): JSONObject = JSONObject()
     .put("printHostUser", printHostUser)
     .put("printHostPassword", printHostPassword)
     .put("printHostSslIgnoreRevoke", printHostSslIgnoreRevoke)
+    .put("bambuBedType", bambuBedType)
+    .put("bambuUseAms", bambuUseAms)
+    .put("bambuAmsMapping", bambuAmsMapping)
+    .put("bambuNozzleMapping", bambuNozzleMapping)
+    .put("bambuBedLeveling", bambuBedLeveling)
+    .put("bambuFlowCalibration", bambuFlowCalibration)
+    .put("bambuVibrationCalibration", bambuVibrationCalibration)
+    .put("bambuTimelapse", bambuTimelapse)
     .put("timeCost", timeCost.toDouble())
     .put("fanSpeedupTimeSeconds", fanSpeedupTimeSeconds.toDouble())
     .put("fanSpeedupOverhangsOnly", fanSpeedupOverhangsOnly)
@@ -347,6 +355,14 @@ internal fun JSONObject.toPrinterProfile(): PrinterProfile = PrinterProfile(
     printHostUser = optString("printHostUser", ""),
     printHostPassword = optString("printHostPassword", ""),
     printHostSslIgnoreRevoke = optBoolean("printHostSslIgnoreRevoke", false),
+    bambuBedType = optString("bambuBedType", ""),
+    bambuUseAms = optBoolean("bambuUseAms", false),
+    bambuAmsMapping = optString("bambuAmsMapping", ""),
+    bambuNozzleMapping = optString("bambuNozzleMapping", ""),
+    bambuBedLeveling = optBoolean("bambuBedLeveling", true),
+    bambuFlowCalibration = optBoolean("bambuFlowCalibration", false),
+    bambuVibrationCalibration = optBoolean("bambuVibrationCalibration", false),
+    bambuTimelapse = optBoolean("bambuTimelapse", false),
     timeCost = optDouble("timeCost", 0.0).toFloat(),
     fanSpeedupTimeSeconds = optDouble("fanSpeedupTimeSeconds", 0.0).toFloat(),
     fanSpeedupOverhangsOnly = optBoolean("fanSpeedupOverhangsOnly", true),
@@ -444,4 +460,4 @@ internal fun JSONObject.toPrinterProfile(): PrinterProfile = PrinterProfile(
     orcaResolvedMachineJsons = optJSONArray("orcaResolvedMachineJsons").toProfileJsonStringList(),
     orcaResolvedSourceChains = optJSONArray("orcaResolvedSourceChains").toProfileJsonStringList(),
     availableNozzleDiameters = optJSONArray("availableNozzleDiameters").toProfileJsonFloatList()
-)
+).withBambuDefaultConnectionType(hasExplicitPrintHostType = has("printHostType"))
