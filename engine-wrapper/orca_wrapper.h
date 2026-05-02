@@ -20,6 +20,7 @@ int orca_set_model_placement(OrcaEngine* engine, double x_mm, double y_mm, doubl
 int orca_set_model_transform(OrcaEngine* engine, double x_mm, double y_mm, double z_mm, double rotation_x_radians, double rotation_y_radians, double rotation_z_radians, double uniform_scale);
 int orca_set_config_json(OrcaEngine* engine, const char* json);
 int orca_slice(OrcaEngine* engine);
+void orca_clear_generated_gcode(OrcaEngine* engine);
 
 const char* orca_get_gcode(OrcaEngine* engine);
 const char* orca_get_gcode_summary(OrcaEngine* engine);

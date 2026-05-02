@@ -170,6 +170,7 @@ internal class AutomationSliceRunner(
         val nativeLoadStartedAt = SystemClock.elapsedRealtime()
         val loadResult = NativeEngineCalls.loadModel(engineHandle, stagedModel.absolutePath)
         if (loadResult !is NativeEngineCallResult.Success) {
+            NativeEngineCalls.clearGeneratedGcode(engineHandle)
             writeStatus("failed: ${loadResult.statusMessage} path=${request.modelPath} staged=${stagedModel.absolutePath}")
             onModelLoadRejected()
             return false

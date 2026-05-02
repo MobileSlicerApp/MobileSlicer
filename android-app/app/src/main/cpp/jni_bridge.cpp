@@ -264,6 +264,17 @@ Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeLoadModel(JNIEnv* en
     return jni_bool_from_result(orca_load_model(engine_from_handle(handle), raw_path.get()));
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeClearGeneratedGcode(JNIEnv*, jclass, jlong handle)
+{
+    if (handle == 0) {
+        return;
+    }
+
+    orca_clear_generated_gcode(engine_from_handle(handle));
+    trim_native_heap();
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeLoadPlateModels(JNIEnv* env, jclass, jlong handle, jobjectArray paths, jdoubleArray transforms, jintArray extruder_ids)
 {

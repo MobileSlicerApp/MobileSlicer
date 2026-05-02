@@ -16,6 +16,7 @@ public:
     bool load_model(const char* path);
     bool set_config_json(const char* json);
     bool slice();
+    void clear_generated_gcode();
     void clear();
 
     bool has_model() const;

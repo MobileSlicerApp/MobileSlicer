@@ -3068,6 +3068,7 @@ extern "C" int orca_load_model(OrcaEngine* engine, const char* path)
     }
     std::lock_guard<std::recursive_mutex> lock(engine->impl.mutex);
     clear_last_error(engine);
+    clear_generated_gcode(engine);
 
     try {
         Slic3r::Model model;
@@ -3107,6 +3108,11 @@ extern "C" int orca_load_model(OrcaEngine* engine, const char* path)
     }
 }
 
+extern "C" void orca_clear_generated_gcode(OrcaEngine* engine)
+{
+    clear_generated_gcode(engine);
+}
+
 extern "C" int orca_load_plate_models(OrcaEngine* engine, const char* const* paths, const double* transforms, const int* extruder_ids, int count)
 {
     if (engine == nullptr || paths == nullptr || transforms == nullptr || extruder_ids == nullptr || count <= 0) {
@@ -3114,6 +3120,7 @@ extern "C" int orca_load_plate_models(OrcaEngine* engine, const char* const* pat
     }
     std::lock_guard<std::recursive_mutex> lock(engine->impl.mutex);
     clear_last_error(engine);
+    clear_generated_gcode(engine);
 
     try {
         Slic3r::Model combined_model;

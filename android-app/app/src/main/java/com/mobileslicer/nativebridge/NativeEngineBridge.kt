@@ -11,6 +11,7 @@ class NativeEngineBridge private constructor() {
         @JvmStatic external fun nativeDestroyEngine(handle: Long)
         @JvmStatic external fun nativeTrimMemory()
         @JvmStatic external fun nativeLoadModel(handle: Long, path: String): Boolean
+        @JvmStatic external fun nativeClearGeneratedGcode(handle: Long)
         @JvmStatic external fun nativeLoadPlateModels(handle: Long, paths: Array<String>, transforms: DoubleArray, extruderIds: IntArray): Boolean
         @JvmStatic external fun nativePlanPlateArrangement(handle: Long, paths: Array<String>, transforms: DoubleArray, extruderIds: IntArray, configJson: String, allowRotation: Boolean): DoubleArray?
         @JvmStatic external fun nativePlanAutoOrientation(handle: Long, paths: Array<String>, transforms: DoubleArray, extruderIds: IntArray, configJson: String): DoubleArray?

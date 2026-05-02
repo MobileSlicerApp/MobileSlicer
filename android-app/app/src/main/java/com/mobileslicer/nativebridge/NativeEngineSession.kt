@@ -19,6 +19,10 @@ internal class NativeEngineSession {
     fun ensureRawHandle(): Long =
         ensureHandle()?.raw ?: 0L
 
+    fun clearGeneratedGcode() {
+        handleOrNull()?.let(NativeEngineCalls::clearGeneratedGcode)
+    }
+
     fun destroy() {
         val handle = rawHandle
         if (handle != 0L) {

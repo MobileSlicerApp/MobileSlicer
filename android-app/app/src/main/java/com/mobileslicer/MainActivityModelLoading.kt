@@ -183,6 +183,7 @@ internal fun MainActivity.loadModelFromUri(uri: Uri): ModelLoadResult {
             else -> null
         }
         if (fileFormat != ImportedModelFormat.Stl) {
+            NativeEngineCalls.clearGeneratedGcode(handle)
             currentModelName = null
             return ModelLoadResult(
                 message = when (fileFormat) {
@@ -196,11 +197,14 @@ internal fun MainActivity.loadModelFromUri(uri: Uri): ModelLoadResult {
 
         val stagingStartedAt = SystemClock.elapsedRealtime()
         val stagedFile = stageModelFile(uri, normalizedName)
-            ?: return ModelLoadResult(
-                message = "Failed to load model\nUnable to read the selected file.",
-                loaded = false,
-                format = fileFormat
-            )
+            ?: run {
+                NativeEngineCalls.clearGeneratedGcode(handle)
+                return ModelLoadResult(
+                    message = "Failed to load model\nUnable to read the selected file.",
+                    loaded = false,
+                    format = fileFormat
+                )
+            }
         val stagingMs = SystemClock.elapsedRealtime() - stagingStartedAt
 
         val bounds = runCatching {
@@ -231,6 +235,7 @@ internal fun MainActivity.loadModelFromUri(uri: Uri): ModelLoadResult {
                 bounds = bounds
             )
         } else {
+            NativeEngineCalls.clearGeneratedGcode(handle)
             stagedFile.delete()
             if (stagedModelFile?.absolutePath == stagedFile.absolutePath) {
                 stagedModelFile = null

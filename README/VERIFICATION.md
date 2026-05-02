@@ -28,6 +28,7 @@ The script defaults to `$ANDROID_SERIAL`, then `RFCYA01ANVE`.
 scripts/verify_android.sh device
 scripts/verify_android.sh device RFCYA01ANVE
 MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1 scripts/verify_android.sh device-automation RFCYA01ANVE
+MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1 scripts/verify_android.sh slice-lifecycle RFCYA01ANVE
 MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1 scripts/verify_android.sh slice-regression RFCYA01ANVE
 MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1 scripts/verify_android.sh perf RFCYA01ANVE
 MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1 scripts/verify_android.sh perf-heavy RFCYA01ANVE
@@ -40,6 +41,9 @@ through `com.mobileslicer.action.AUTOMATE_SLICE`, and fails if the status is not
 physical-device matrix for brim, wall count, infill, support, temperature, and speed
 changes, pulls emitted G-code, and checks that the expected G-code geometry or command
 signals changed.
+`slice-lifecycle` runs valid, rejected, and valid automation loads and asserts the
+rejected load does not leave stale G-code output behind before a replacement model
+slices successfully.
 
 If device automation fails after a slice starts, the script captures context,
 logcat, crash logcat, status text, and G-code head/tail snippets under

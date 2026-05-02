@@ -238,6 +238,7 @@ internal fun MainActivity.loadModelFileIntoNativeCache(modelFilePath: String): B
         currentModelName = modelFile.nameWithoutExtension.removePrefix("selected-model-")
         true
     } else {
+        NativeEngineCalls.clearGeneratedGcode(handle)
         nativeLoadedModelPath = null
         false
     }
@@ -256,6 +257,7 @@ internal fun MainActivity.loadPlateObjectsIntoNativeCache(
         return loadModelFileIntoNativeCache(plateObjects.first().filePath)
     }
     val request = nativePlateLoadRequest(plateObjects, printerBed) ?: run {
+        NativeEngineCalls.clearGeneratedGcode(handle)
         nativeLoadedModelPath = null
         return false
     }
@@ -267,6 +269,7 @@ internal fun MainActivity.loadPlateObjectsIntoNativeCache(
         nativeLoadedModelPath = request.signature
         true
     } else {
+        NativeEngineCalls.clearGeneratedGcode(handle)
         nativeLoadedModelPath = null
         false
     }
@@ -302,6 +305,7 @@ internal fun MainActivity.sliceCurrentModel(
                 val modelReloadStartedAt = SystemClock.elapsedRealtime()
                 val loadPlateResult = NativeEngineCalls.loadPlateModels(handle, request.paths, request.transforms, request.extruderIds)
                 if (loadPlateResult !is NativeEngineCallResult.Success) {
+                    NativeEngineCalls.clearGeneratedGcode(handle)
                     nativeLoadedModelPath = null
                     return SliceResult(
                         "Slice failed\nUnable to load all plate objects into the native engine.\n${loadPlateResult.statusMessage}",
@@ -326,6 +330,7 @@ internal fun MainActivity.sliceCurrentModel(
                 val modelReloadStartedAt = SystemClock.elapsedRealtime()
                 val loadResult = NativeEngineCalls.loadModel(handle, stagedModel.absolutePath)
                 if (loadResult !is NativeEngineCallResult.Success) {
+                    NativeEngineCalls.clearGeneratedGcode(handle)
                     nativeLoadedModelPath = null
                     return SliceResult(
                         "Slice failed\nUnable to load the staged model into the native engine.\n${loadResult.statusMessage}",

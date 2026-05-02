@@ -64,6 +64,7 @@ Usage:
   scripts/verify_android.sh install [serial]
   scripts/verify_android.sh device [serial]
   scripts/verify_android.sh device-automation [serial]
+  scripts/verify_android.sh slice-lifecycle [serial]
   scripts/verify_android.sh slice-regression [serial]
   scripts/verify_android.sh profile-ui [serial]
   scripts/verify_android.sh perf [serial]
@@ -88,6 +89,10 @@ Modes:
   device-automation
           Build, install, cold-launch, and assert the process stays alive with
           an empty crash buffer, then slice the cube fixture.
+          Requires MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
+  slice-lifecycle
+          Build, install, run valid/invalid/valid automation slices, and assert
+          rejected loads do not emit stale G-code.
           Requires MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
   slice-regression
           Build, install, run a physical-device slicing parameter matrix, pull
@@ -708,6 +713,51 @@ run_automation_slice() {
   clear_current_automation_context
 }
 
+run_automation_slice_expect_failure() {
+  local local_stl="$1"
+  local serial="$2"
+  local label="$3"
+  local should_install="${4:-1}"
+  local config_json="${5:-$BENCHY_AUTOMATION_CONFIG}"
+  if [[ "$should_install" == "1" ]]; then
+    install_apk "$serial"
+  fi
+
+  local app_model_path
+  app_model_path="$(stage_app_private_file "$serial" "$local_stl" | tail -n 1)"
+  local stamp
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  local output_path="/data/data/$PACKAGE_NAME/files/automation/$label-$stamp.gcode"
+  local status_path="$output_path.status.txt"
+  set_current_automation_context "$serial" "$label" "$output_path" "$status_path"
+
+  log "Running expected-failure automation slice '$label' on $serial"
+  adb_device "$serial" shell run-as "$PACKAGE_NAME" rm -f "$output_path" "$status_path"
+  adb_device "$serial" shell am force-stop "$PACKAGE_NAME"
+  adb_device "$serial" logcat -c
+  adb_device "$serial" shell "CONFIG='$config_json'; am start -W \
+    -a '$AUTOMATION_ACTION' \
+    -n '$MAIN_ACTIVITY' \
+    --es automation_model_path '$app_model_path' \
+    --es automation_output_path '$output_path' \
+    --es automation_status_path '$status_path' \
+    --es automation_config_json \"\$CONFIG\""
+
+  log "Automation status"
+  local status
+  status="$(wait_for_status "$serial" "$status_path")"
+  printf '%s\n' "$status"
+  [[ "$status" == failed:* ]] || fail "Automation slice unexpectedly succeeded."
+  if adb_device "$serial" shell run-as "$PACKAGE_NAME" test -e "$output_path"; then
+    local output_bytes
+    output_bytes="$(adb_device "$serial" shell run-as "$PACKAGE_NAME" wc -c "$output_path" | awk '{print $1}')"
+    fail "Rejected automation slice left stale output at $output_path ($output_bytes bytes)."
+  fi
+  AUTOMATION_LAST_OUTPUT_PATH="$output_path"
+  AUTOMATION_LAST_STATUS="$status"
+  clear_current_automation_context
+}
+
 set_current_automation_context() {
   CURRENT_AUTOMATION_SERIAL="$1"
   CURRENT_AUTOMATION_LABEL="$2"
@@ -963,15 +1013,17 @@ run_performance_gate() {
     [[ -f "$perf_baseline" ]] || fail "Performance baseline does not exist: $perf_baseline"
     baseline_args=(--baseline "$perf_baseline")
   fi
+  local analyzer_status=0
   "$ROOT_DIR/scripts/analyze_mobile_performance.py" \
     --input "$records_path" \
     --output-json "$report_json" \
     --output-md "$report_md" \
-    "${baseline_args[@]}"
+    "${baseline_args[@]}" || analyzer_status=$?
   ln -sfn "$artifact_dir" "$artifact_root/latest"
   log "Performance artifacts: $artifact_dir"
   PERF_CURRENT_MEMINFO_DIR=""
   assert_no_crash_after_launch "$serial"
+  [[ "$analyzer_status" -eq 0 ]] || fail "Performance analyzer failed; see artifacts: $artifact_dir"
 }
 
 pull_app_private_file() {
@@ -1134,6 +1186,33 @@ run_slice_regression_matrix() {
   assert_no_crash_after_launch "$serial"
 }
 
+run_slice_lifecycle_regression() {
+  local serial="$1"
+  require_device_automation
+  require_automation_fixture "$DEFAULT_SLICE_SMOKE_STL" "default slice smoke STL"
+  require_automation_fixture "$SUPPORT_SLICE_SMOKE_STL" "support slice smoke STL"
+  install_apk "$serial"
+
+  local tmp_dir invalid_stl baseline_config support_config
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+  invalid_stl="$tmp_dir/rejected-empty.stl"
+  printf 'solid rejected\nendsolid rejected\n' > "$invalid_stl"
+  baseline_config="$(automation_config_with_overrides brim_width=0 wall_loops=2 sparse_infill_density=15 enable_support=false)"
+  support_config="$(automation_config_with_overrides brim_width=0 enable_support=true support_type=normal\(auto\) support_style=default support_threshold_angle=10 support_on_build_plate_only=false)"
+
+  run_automation_slice "$DEFAULT_SLICE_SMOKE_STL" "$serial" "lifecycle-valid-a" "0" "$baseline_config"
+  local first_bytes="$AUTOMATION_LAST_BYTES"
+  run_automation_slice_expect_failure "$invalid_stl" "$serial" "lifecycle-rejected-empty" "0" "$baseline_config"
+  [[ "$AUTOMATION_LAST_STATUS" == *"nativeLoadModel failed"* || "$AUTOMATION_LAST_STATUS" == *"load"* ]] ||
+    fail "Rejected lifecycle load did not report a load failure: $AUTOMATION_LAST_STATUS"
+  run_automation_slice "$SUPPORT_SLICE_SMOKE_STL" "$serial" "lifecycle-valid-b" "0" "$support_config"
+  local second_bytes="$AUTOMATION_LAST_BYTES"
+  [[ "$first_bytes" != "$second_bytes" ]] ||
+    fail "Lifecycle reload emitted the same byte count after model replacement; expected a distinct support fixture output."
+  assert_no_crash_after_launch "$serial"
+}
+
 mode="${1:-}"
 case "$mode" in
   unit)
@@ -1173,6 +1252,9 @@ case "$mode" in
     ;;
   device-automation)
     run_device_automation_smoke "$(device_serial "${2:-}")"
+    ;;
+  slice-lifecycle)
+    run_slice_lifecycle_regression "$(device_serial "${2:-}")"
     ;;
   slice-regression)
     run_slice_regression_matrix "$(device_serial "${2:-}")"

@@ -54,6 +54,7 @@ extern "C" int orca_load_model(OrcaEngine* engine, const char* path)
 
     try {
         engine->last_error.clear();
+        engine->loader.clear_generated_gcode();
         if (!engine->loader.load_model(path)) {
             engine->last_error = "reduced Android wrapper rejected the model";
             return ORCA_ERROR_LOAD_MODEL;
@@ -73,6 +74,7 @@ extern "C" int orca_load_plate_models(OrcaEngine* engine, const char* const* pat
 
     try {
         engine->last_error.clear();
+        engine->loader.clear_generated_gcode();
         // The reduced Android wrapper is retained for lightweight host probes. It does
         // not model a true multi-object plate, so it falls back to the first object.
         if (!engine->loader.load_model(paths[0])) {
@@ -83,6 +85,13 @@ extern "C" int orca_load_plate_models(OrcaEngine* engine, const char* const* pat
     } catch (...) {
         engine->last_error = "reduced Android wrapper plate load failed";
         return ORCA_ERROR_LOAD_MODEL;
+    }
+}
+
+extern "C" void orca_clear_generated_gcode(OrcaEngine* engine)
+{
+    if (engine != nullptr) {
+        engine->loader.clear_generated_gcode();
     }
 }
 

@@ -38,6 +38,10 @@ internal object NativeEngineCalls {
             NativeEngineBridge.nativeLoadModel(handle.raw, path)
         }
 
+    fun clearGeneratedGcode(handle: NativeEngineHandle) {
+        NativeEngineBridge.nativeClearGeneratedGcode(handle.raw)
+    }
+
     fun loadPlateModels(
         handle: NativeEngineHandle,
         paths: Array<String>,

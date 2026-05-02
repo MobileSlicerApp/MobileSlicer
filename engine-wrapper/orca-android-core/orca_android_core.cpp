@@ -208,6 +208,13 @@ bool ModelLoader::slice()
     return !impl_->gcode.empty();
 }
 
+void ModelLoader::clear_generated_gcode()
+{
+    if (impl_ != nullptr) {
+        impl_->gcode.clear();
+    }
+}
+
 void ModelLoader::clear()
 {
     if (impl_ != nullptr) {
