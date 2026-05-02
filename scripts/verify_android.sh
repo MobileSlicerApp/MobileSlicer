@@ -346,6 +346,20 @@ tap_text() {
   sleep 1
 }
 
+tap_text_after_horizontal_swipe() {
+  local serial="$1"
+  local text="$2"
+  local coords
+  if ! coords="$(ui_text_bounds "$serial" "$text")"; then
+    adb_device "$serial" shell input swipe 1150 720 250 720 350
+    sleep 1
+    coords="$(ui_text_bounds "$serial" "$text")" || fail "Unable to find UI text after horizontal swipe: $text"
+  fi
+  log "Tapping '$text'"
+  adb_device "$serial" shell input tap $coords
+  sleep 1
+}
+
 assert_text_visible() {
   local serial="$1"
   local text="$2"
@@ -420,7 +434,7 @@ run_profile_ui_smoke() {
   tap_text "$serial" "Edit / Rename"
   assert_text_visible "$serial" "Quality"
   assert_text_visible "$serial" "Layer height"
-  tap_text "$serial" "Strength"
+  tap_text_after_horizontal_swipe "$serial" "Strength"
   assert_text_visible "$serial" "Top/bottom shells"
   adb_device "$serial" shell input keyevent KEYCODE_BACK
   sleep 1

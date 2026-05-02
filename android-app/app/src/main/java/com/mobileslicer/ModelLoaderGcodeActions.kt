@@ -48,6 +48,10 @@ internal data class ModelLoaderGcodeFileAction(
     val fileName: String
 )
 
+internal fun exportCancelledStatus(): String = "Export cancelled"
+
+internal fun uploadCancelledStatus(): String = "Upload cancelled"
+
 internal fun planGcodeFileAction(
     gcodeFilePath: String?,
     calibrationJob: CalibrationJob?,

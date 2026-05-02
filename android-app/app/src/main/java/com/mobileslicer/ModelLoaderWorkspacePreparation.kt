@@ -78,3 +78,11 @@ internal fun workspaceMeshPreparedStatus(
             append("Workspace mesh prepared. Waiting for first visible frame.")
         }
     }
+
+internal fun firstVisibleWorkspaceFrameStatus(currentStatus: String, firstFrameMs: Long): String =
+    buildString {
+        append(currentStatus.lineSequence().joinToString("\n"))
+        append('\n')
+        append("First visible workspace frame: ")
+        append(formatDurationMs(firstFrameMs))
+    }

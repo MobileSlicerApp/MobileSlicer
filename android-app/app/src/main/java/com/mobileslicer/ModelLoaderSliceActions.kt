@@ -2,6 +2,7 @@ package com.mobileslicer
 
 import com.mobileslicer.calibration.CalibrationJob
 import com.mobileslicer.workspace.SliceResult
+import com.mobileslicer.workspace.WorkspaceMode
 
 internal const val ModelLoaderPrintableVolumeExceededMessage =
     "Slice failed\nPrintable volume exceeded.\nThe model fits, but generated skirt, brim, or purge geometry cannot fit inside the current printer bed."
@@ -52,6 +53,31 @@ internal data class ModelLoaderSliceCompletionPlan(
     val statusMessage: String,
     val completionResult: SliceResult
 )
+
+internal data class ModelLoaderSliceUiStartPlan(
+    val sliceInProgress: Boolean,
+    val gcodeFilePath: String?,
+    val summary: com.mobileslicer.workspace.SliceResultSummary?,
+    val timing: com.mobileslicer.workspace.SlicePipelineTiming?,
+    val previewKey: Long,
+    val previewStartedAtMs: Long?,
+    val firstVisiblePreviewFrameMs: Long?,
+    val workspaceMode: WorkspaceMode,
+    val statusMessage: String
+)
+
+internal fun planModelLoaderSliceUiStart(statusMessage: String): ModelLoaderSliceUiStartPlan =
+    ModelLoaderSliceUiStartPlan(
+        sliceInProgress = true,
+        gcodeFilePath = null,
+        summary = null,
+        timing = null,
+        previewKey = 0L,
+        previewStartedAtMs = null,
+        firstVisiblePreviewFrameMs = null,
+        workspaceMode = WorkspaceMode.Prepare,
+        statusMessage = statusMessage
+    )
 
 internal fun planModelLoaderSliceCompletion(
     result: SliceResult,

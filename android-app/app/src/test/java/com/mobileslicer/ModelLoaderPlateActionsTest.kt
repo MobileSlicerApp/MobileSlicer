@@ -107,6 +107,10 @@ class ModelLoaderPlateActionsTest {
     @Test
     fun platePlanningStatusMessagesAreStable() {
         assertEquals(
+            "Auto-orient unavailable\nNo objects on plate",
+            autoOrientPlateObjectsUnavailableStatus()
+        )
+        assertEquals(
             "Object already oriented\nSnapped to nearest 90 degrees",
             autoOrientPlateObjectsStatus(
                 PlateAutoOrientResult(objects = emptyList(), targetCount = 1, changedCount = 0, selectedOnly = true)

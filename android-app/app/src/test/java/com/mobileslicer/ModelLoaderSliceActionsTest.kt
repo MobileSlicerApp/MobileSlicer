@@ -4,6 +4,7 @@ import com.mobileslicer.calibration.CalibrationJob
 import com.mobileslicer.calibration.CalibrationOptions
 import com.mobileslicer.calibration.CalibrationType
 import com.mobileslicer.workspace.SliceResult
+import com.mobileslicer.workspace.WorkspaceMode
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -74,6 +75,21 @@ class ModelLoaderSliceActionsTest {
 
         val start = plan as ModelLoaderSliceStartPlan.Start
         assertEquals("Slice in progress\nNative slice inputs: Printer / PLA / 0.20mm", start.statusMessage)
+    }
+
+    @Test
+    fun sliceUiStartPlanResetsGeneratedOutputAndPreviewState() {
+        val plan = planModelLoaderSliceUiStart("Slice in progress")
+
+        assertTrue(plan.sliceInProgress)
+        assertEquals(null, plan.gcodeFilePath)
+        assertEquals(null, plan.summary)
+        assertEquals(null, plan.timing)
+        assertEquals(0L, plan.previewKey)
+        assertEquals(null, plan.previewStartedAtMs)
+        assertEquals(null, plan.firstVisiblePreviewFrameMs)
+        assertEquals(WorkspaceMode.Prepare, plan.workspaceMode)
+        assertEquals("Slice in progress", plan.statusMessage)
     }
 
     @Test

@@ -19,6 +19,8 @@ import org.junit.Test
 class ModelLoaderGcodeActionsTest {
     @Test
     fun gcodeFileActionReturnsNullWithoutGeneratedPath() {
+        assertEquals("Export cancelled", exportCancelledStatus())
+        assertEquals("Upload cancelled", uploadCancelledStatus())
         assertNull(
             planGcodeFileAction(
                 gcodeFilePath = null,

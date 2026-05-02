@@ -20,6 +20,8 @@ internal data class ModelLoaderObjectDeleteResult(
     val changed: Boolean
 )
 
+internal fun autoOrientPlateObjectsUnavailableStatus(): String = "Auto-orient unavailable\nNo objects on plate"
+
 internal fun autoOrientPlateObjectsStatus(result: PlateAutoOrientResult): String =
     if (result.changedCount == 0) {
         if (result.selectedOnly) {

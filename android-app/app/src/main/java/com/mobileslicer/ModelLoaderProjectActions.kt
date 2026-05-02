@@ -68,7 +68,7 @@ internal fun planSavePlatePrompt(
     currentModelLabel: String
 ): ModelLoaderSavePlatePromptPlan =
     if (plateObjects.isEmpty()) {
-        ModelLoaderSavePlatePromptPlan.Fail("No plate to save")
+        ModelLoaderSavePlatePromptPlan.Fail(noPlateToSaveStatus())
     } else {
         ModelLoaderSavePlatePromptPlan.Prompt(
             suggestedName = suggestedSavedProjectName(
@@ -77,6 +77,15 @@ internal fun planSavePlatePrompt(
             )
         )
     }
+
+internal fun noPlateToSaveStatus(): String = "No plate to save"
+
+internal fun plateSavedStatus(project: SavedProject): String = "Plate saved\n${project.name}"
+
+internal fun savedProjectOpeningStatus(project: SavedProject): String = "Opening saved project\n${project.name}"
+
+internal fun savedProjectOpenMissingFilesStatus(): String =
+    "Saved project could not be opened\nModel files are missing."
 
 internal fun savedProjectLoadedStatus(project: SavedProject, nativeWarmLoadSucceeded: Boolean): String =
     buildString {

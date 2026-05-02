@@ -30,7 +30,6 @@ import com.mobileslicer.workspace.WorkspacePreparationResult
 import com.mobileslicer.workspace.WorkspaceScreen
 import com.mobileslicer.workspace.WorkspaceSessionViewModel
 import com.mobileslicer.workspace.defaultViewerModelTransform
-import com.mobileslicer.workspace.formatDurationMs
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -173,20 +172,14 @@ internal fun ModelLoaderScreen(
     }
 
     fun handleBackNavigation() {
-        when (currentScreen) {
-            AppScreen.Home -> Unit
-            AppScreen.Workspace -> {
-                if (workspaceMode == WorkspaceMode.Preview) {
-                    workspaceMode = WorkspaceMode.Prepare
-                } else {
-                    currentScreen = AppScreen.Home
-                }
-            }
-            AppScreen.Profiles -> currentScreen = appScreenFromName(profilesReturnScreenName, AppScreen.Home)
-            AppScreen.Calibrations -> currentScreen = AppScreen.Home
-            AppScreen.PrinterBrowser -> currentScreen = appScreenFromName(printerBrowserReturnScreenName, AppScreen.Workspace)
-            AppScreen.Settings -> currentScreen = AppScreen.Home
-        }
+        val plan = planModelLoaderBackNavigation(
+            currentScreen = currentScreen,
+            workspaceMode = workspaceMode,
+            profilesReturnScreenName = profilesReturnScreenName,
+            printerBrowserReturnScreenName = printerBrowserReturnScreenName
+        )
+        currentScreen = plan.screen
+        workspaceMode = plan.workspaceMode
     }
 
     missingProfileDialogMessage?.let { message ->
@@ -239,7 +232,7 @@ internal fun ModelLoaderScreen(
                 printerUploadJob?.cancel()
                 sendToPrinterInProgress = false
                 printerUploadProgressPercent = null
-                workspaceStatus = "Upload cancelled"
+                workspaceStatus = uploadCancelledStatus()
             }
         )
     }
@@ -388,7 +381,7 @@ internal fun ModelLoaderScreen(
 
     fun saveCurrentPlate(projectName: String, thumbnailBitmap: Bitmap?) {
         if (plateObjects.isEmpty()) {
-            workspaceStatus = "No plate to save"
+            workspaceStatus = noPlateToSaveStatus()
             return
         }
         val project = buildSavedProject(
@@ -404,7 +397,7 @@ internal fun ModelLoaderScreen(
         )
         updateSavedProjects(listOf(project) + savedProjects.filterNot { it.id == project.id })
         currentSavedProjectId = project.id
-        workspaceStatus = "Plate saved\n${project.name}"
+        workspaceStatus = plateSavedStatus(project)
         sliceSuccessBanner = "Save Successful"
     }
 
@@ -414,13 +407,13 @@ internal fun ModelLoaderScreen(
             importStartedAtMs = SystemClock.elapsedRealtime()
             firstVisibleWorkspaceFrameMs = null
             firstVisiblePreviewFrameMs = null
-            workspaceStatus = "Opening saved project\n${project.name}"
+            workspaceStatus = savedProjectOpeningStatus(project)
             val openedProject = withContext(Dispatchers.Default) {
                 openSavedProjectState(project)
             }
             if (openedProject == null) {
                 importInProgress = false
-                workspaceStatus = "Saved project could not be opened\nModel files are missing."
+                workspaceStatus = savedProjectOpenMissingFilesStatus()
                 return@launch
             }
             profileStore = project.profileStore
@@ -537,7 +530,7 @@ internal fun ModelLoaderScreen(
             selectedPlateObjectId = selectedPlateObjectId
         )
         if (result == null) {
-            workspaceStatus = "Auto-orient unavailable\nNo objects on plate"
+            workspaceStatus = autoOrientPlateObjectsUnavailableStatus()
             return
         }
         plateObjects.clear()
@@ -793,7 +786,7 @@ internal fun ModelLoaderScreen(
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(GCODE_MIME_TYPE)) { uri ->
         val gcodeFilePath = pendingExportGcodeFilePath
         workspaceStatus = if (uri == null || gcodeFilePath == null) {
-            "Export cancelled"
+            exportCancelledStatus()
         } else {
             onExportRequested(uri, gcodeFilePath)
         }
@@ -1032,12 +1025,7 @@ internal fun ModelLoaderScreen(
                         if (startedAt != null) {
                             val firstFrameMs = SystemClock.elapsedRealtime() - startedAt
                             firstVisibleWorkspaceFrameMs = firstFrameMs
-                            workspaceStatus = buildString {
-                                append(workspaceStatus.lineSequence().joinToString("\n"))
-                                append('\n')
-                                append("First visible workspace frame: ")
-                                append(formatDurationMs(firstFrameMs))
-                            }
+                            workspaceStatus = firstVisibleWorkspaceFrameStatus(workspaceStatus, firstFrameMs)
                         }
                     }
                 },
@@ -1069,15 +1057,16 @@ internal fun ModelLoaderScreen(
                             sliceCompletionResult = sliceStartPlan.result
                         }
                         is ModelLoaderSliceStartPlan.Start -> {
-                            sliceInProgress = true
-                            currentGcodeFilePath = null
-                            currentSliceSummary = null
-                            currentSliceTiming = null
-                            currentSlicePreviewKey = 0L
-                            previewStartedAtMs = null
-                            firstVisiblePreviewFrameMs = null
-                            workspaceMode = WorkspaceMode.Prepare
-                            workspaceStatus = sliceStartPlan.statusMessage
+                            val uiStartPlan = planModelLoaderSliceUiStart(sliceStartPlan.statusMessage)
+                            sliceInProgress = uiStartPlan.sliceInProgress
+                            currentGcodeFilePath = uiStartPlan.gcodeFilePath
+                            currentSliceSummary = uiStartPlan.summary
+                            currentSliceTiming = uiStartPlan.timing
+                            currentSlicePreviewKey = uiStartPlan.previewKey
+                            previewStartedAtMs = uiStartPlan.previewStartedAtMs
+                            firstVisiblePreviewFrameMs = uiStartPlan.firstVisiblePreviewFrameMs
+                            workspaceMode = uiStartPlan.workspaceMode
+                            workspaceStatus = uiStartPlan.statusMessage
                             coroutineScope.launch {
                                 val sliceConfiguration = activeConfiguration
                                 val sliceCalibrationJob = currentCalibrationJob

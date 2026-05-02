@@ -90,6 +90,13 @@ class ModelLoaderProjectActionsTest {
     fun savedProjectLoadedStatusIncludesNativeReloadWarningOnlyWhenNeeded() {
         val project = savedProject(id = "project_status").copy(name = "Fixture Plate")
 
+        assertEquals("No plate to save", noPlateToSaveStatus())
+        assertEquals("Plate saved\nFixture Plate", plateSavedStatus(project))
+        assertEquals("Opening saved project\nFixture Plate", savedProjectOpeningStatus(project))
+        assertEquals(
+            "Saved project could not be opened\nModel files are missing.",
+            savedProjectOpenMissingFilesStatus()
+        )
         assertEquals("Project loaded\nFixture Plate", savedProjectLoadedStatus(project, nativeWarmLoadSucceeded = true))
         assertEquals(
             "Project loaded\nFixture Plate\nNative model will reload on first slice.",
