@@ -4480,6 +4480,31 @@ static bool cached_preview_covers_layer_range(const OrcaEngineImpl& impl, long m
     return max_layer + 1 < cached_layers;
 }
 
+static void populate_preview_cache_status_from_existing(const OrcaEngineImpl& impl, PreviewCacheStatus& status)
+{
+    status.cache_hit = impl.cached_preview_valid;
+    status.cache_valid = impl.cached_preview_valid;
+    status.cache_complete = impl.cached_preview_complete;
+    status.source_size = impl.gcode.size();
+    status.cached_vertices = impl.cached_preview_input.vertices.size();
+    status.cached_layers = gcode_input_layer_count(impl.cached_preview_input);
+}
+
+static bool requested_preview_range_covers_known_layers(const OrcaEngineImpl& impl, long min_layer, long max_layer)
+{
+    if (min_layer > 0) {
+        return false;
+    }
+    const size_t source_size = impl.gcode.size();
+    if (
+        !impl.cached_preview_layer_counts.empty() &&
+        impl.cached_preview_layer_counts_source_size == source_size
+    ) {
+        return max_layer >= static_cast<long>(impl.cached_preview_layer_counts.size()) - 1L;
+    }
+    return max_layer < 0 || max_layer >= std::numeric_limits<int>::max();
+}
+
 static bool is_gcode_preview_generation_current(const OrcaEngine* engine, long generation)
 {
     return engine != nullptr &&
@@ -4632,14 +4657,26 @@ extern "C" int orca_gcode_viewer_load_latest_slice(
         std::string cache_error;
         PreviewCacheStatus cache_status;
         const auto total_start = std::chrono::steady_clock::now();
-        const bool cache_available = ensure_gcode_preview_cache(engine, cache_error, &cache_status);
+        bool cache_covers_selected_range = cached_preview_covers_layer_range(engine->impl, min_layer, max_layer);
+        if (cache_covers_selected_range) {
+            populate_preview_cache_status_from_existing(engine->impl, cache_status);
+        }
+        const bool should_build_preview_cache =
+            !cache_covers_selected_range &&
+            requested_preview_range_covers_known_layers(engine->impl, min_layer, max_layer);
+        const bool cache_available = should_build_preview_cache ?
+            ensure_gcode_preview_cache(engine, cache_error, &cache_status) :
+            false;
         size_t preview_vertices = 0;
         bool loaded_directly_from_cache = false;
         long selected_parse_ms = 0;
         long libvgcode_load_ms = 0;
-        const bool cache_covers_selected_range =
+        cache_covers_selected_range =
             cache_available || cached_preview_covers_layer_range(engine->impl, min_layer, max_layer);
         if (cache_covers_selected_range) {
+            if (!cache_status.cache_valid) {
+                populate_preview_cache_status_from_existing(engine->impl, cache_status);
+            }
             const auto range_load_start = std::chrono::steady_clock::now();
             preview_vertices = viewer->viewer.load_layer_range(
                 engine->impl.cached_preview_input,
