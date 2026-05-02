@@ -29,4 +29,11 @@ class PreviewInteractionAutomationTest {
             )
         )
     }
+
+    @Test
+    fun clampsPreviewChurnRequestCount() {
+        assertEquals(0, PreviewInteractionAutomationRequest.normalizeChurnRequests(-1))
+        assertEquals(12, PreviewInteractionAutomationRequest.normalizeChurnRequests(12))
+        assertEquals(40, PreviewInteractionAutomationRequest.normalizeChurnRequests(10_000))
+    }
 }

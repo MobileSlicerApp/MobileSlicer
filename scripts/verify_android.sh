@@ -101,6 +101,7 @@ Usage:
   scripts/verify_android.sh responsiveness-slice [serial]
   scripts/verify_android.sh responsiveness-heavy [serial]
   scripts/verify_android.sh preview-interaction [serial]
+  scripts/verify_android.sh preview-churn [serial]
   scripts/verify_android.sh perf [serial]
   scripts/verify_android.sh perf-heavy [serial]
   scripts/verify_android.sh benchy <local-stl-path> [serial]
@@ -154,6 +155,12 @@ Modes:
           renderer, scrub inside a chunk, switch display modes, switch chunks
           when available, and capture runtime preview frame metrics under
           artifacts/preview-interaction. Requires
+          MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
+  preview-churn
+          Build, install, slice the medium fixture, open the real G-code preview
+          renderer, then rapidly queue alternating preview chunk/display requests
+          before waiting for the newest request to render. Captures artifacts
+          under artifacts/preview-churn. Requires
           MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
   perf    Build/install perfDebug, run non-UI startup and slicing benchmarks,
           write reports under artifacts/performance, and fail on hard budgets
@@ -784,9 +791,14 @@ run_responsiveness_heavy_profile() {
 
 run_preview_interaction_profile() {
   local serial="$1"
+  local churn_requests="${2:-0}"
   require_device_automation
   require_automation_fixture "$MEDIUM_SLICE_PERF_STL" "medium performance STL"
-  local artifact_root="$ROOT_DIR/artifacts/preview-interaction"
+  local profile_name="preview-interaction"
+  if [[ "$churn_requests" != "0" ]]; then
+    profile_name="preview-churn"
+  fi
+  local artifact_root="$ROOT_DIR/artifacts/$profile_name"
   local stamp
   stamp="$(date +%Y%m%d-%H%M%S)"
   local artifact_dir="$artifact_root/$stamp"
@@ -795,9 +807,9 @@ run_preview_interaction_profile() {
   install_apk "$serial"
   local app_model_path
   app_model_path="$(stage_app_private_file "$serial" "$MEDIUM_SLICE_PERF_STL" | tail -n 1)"
-  local status_path="/data/data/$PACKAGE_NAME/files/automation/preview-interaction-$stamp.status.txt"
+  local status_path="/data/data/$PACKAGE_NAME/files/automation/$profile_name-$stamp.status.txt"
 
-  log "Running preview interaction profile on $serial"
+  log "Running $profile_name profile on $serial"
   adb_device "$serial" shell run-as "$PACKAGE_NAME" rm -f "$status_path"
   adb_device "$serial" shell am force-stop "$PACKAGE_NAME"
   adb_device "$serial" logcat -c
@@ -806,33 +818,43 @@ run_preview_interaction_profile() {
     -n '$MAIN_ACTIVITY' \
     --es preview_profile_model_path '$app_model_path' \
     --es preview_profile_status_path '$status_path' \
+    --ei preview_profile_churn_requests '$churn_requests' \
     --es automation_config_json \"\$CONFIG\""
 
   local status
   status="$(wait_for_status "$serial" "$status_path" 120 1)"
   printf '%s\n' "$status" > "$artifact_dir/status.txt"
-  [[ "$status" == success:* ]] || fail "Preview interaction profile did not report success."
-  local metric_count first_ready rendered_frames
+  [[ "$status" == success:* ]] || fail "$profile_name profile did not report success."
+  local metric_count first_ready rendered_frames churn_ready
   metric_count="$(status_metric "$status" "metrics")"
   first_ready="$(status_metric "$status" "firstReady")"
   rendered_frames="$(status_metric "$status" "renderedFrames")"
+  churn_ready="$(status_metric "$status" "churnReady")"
   [[ "${metric_count:-0}" =~ ^[0-9]+$ && "$metric_count" -gt 0 ]] ||
-    fail "Preview interaction profile did not capture preview runtime metrics."
+    fail "$profile_name profile did not capture preview runtime metrics."
   [[ "$first_ready" == "1" ]] ||
-    fail "Preview interaction profile did not render the first preview frame."
+    fail "$profile_name profile did not render the first preview frame."
+  if [[ "$churn_requests" != "0" ]]; then
+    [[ "$churn_ready" == "1" ]] ||
+      fail "$profile_name profile did not render the newest churn preview request."
+  fi
   [[ "${rendered_frames:-0}" =~ ^[0-9]+$ && "$rendered_frames" -gt 0 ]] ||
-    fail "Preview interaction profile did not render preview frames."
+    fail "$profile_name profile did not render preview frames."
 
   adb_device "$serial" logcat -d -v time > "$artifact_dir/logcat.txt" 2>&1 || true
   grep -E 'MobileSlicerPerf|preview_profile:' "$artifact_dir/logcat.txt" > "$artifact_dir/timing-logcat.txt" || true
   adb_device "$serial" logcat -b crash -d -v time > "$artifact_dir/crash-logcat.txt" 2>&1 || true
   if [[ -s "$artifact_dir/crash-logcat.txt" ]]; then
     cat "$artifact_dir/crash-logcat.txt" >&2
-    fail "Crash log buffer is not empty after preview interaction profile."
+    fail "Crash log buffer is not empty after $profile_name profile."
   fi
 
   {
-    printf '# MobileSlicer Preview Interaction Profile\n\n'
+    if [[ "$churn_requests" == "0" ]]; then
+      printf '# MobileSlicer Preview Interaction Profile\n\n'
+    else
+      printf '# MobileSlicer Preview Churn Profile\n\n'
+    fi
     printf -- '- serial: %s\n' "$serial"
     printf -- '- captured_at: %s\n' "$stamp"
     printf -- '- fixture: %s\n\n' "$MEDIUM_SLICE_PERF_STL"
@@ -842,6 +864,8 @@ run_preview_interaction_profile() {
     printf -- '- second_range_layers: %s\n' "$(status_metric "$status" "secondRangeLayers")"
     printf -- '- first_ready: %s\n' "$first_ready"
     printf -- '- second_ready: %s\n' "$(status_metric "$status" "secondReady")"
+    printf -- '- churn_requests: %s\n' "$(status_metric "$status" "churnRequests")"
+    printf -- '- churn_ready: %s\n' "$churn_ready"
     printf -- '- metrics: %s\n' "$metric_count"
     printf -- '- max_native_load: %s ms\n' "$(status_metric "$status" "maxNativeLoadMs")"
     printf -- '- max_first_frame: %s ms\n' "$(status_metric "$status" "maxFirstFrameMs")"
@@ -857,7 +881,7 @@ run_preview_interaction_profile() {
       printf 'No preview timing events were captured.\n'
     fi
   } > "$artifact_dir/report.md"
-  log "Preview interaction artifacts: $artifact_dir"
+  log "$profile_name artifacts: $artifact_dir"
 }
 
 stage_app_private_file() {
@@ -1786,6 +1810,9 @@ case "$mode" in
     ;;
   preview-interaction)
     run_preview_interaction_profile "$(device_serial "${2:-}")"
+    ;;
+  preview-churn)
+    run_preview_interaction_profile "$(device_serial "${2:-}")" "12"
     ;;
   perf)
     run_performance_gate "$(device_serial "${2:-}")"

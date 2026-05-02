@@ -33,12 +33,14 @@ import org.json.JSONObject
 internal data class PreviewInteractionAutomationRequest(
     val intent: Intent,
     val modelPath: String,
-    val statusPath: String
+    val statusPath: String,
+    val churnRequests: Int
 ) {
     companion object {
         const val ACTION_PROFILE_PREVIEW = "com.mobileslicer.action.PROFILE_PREVIEW_INTERACTION"
         const val EXTRA_MODEL_PATH = "preview_profile_model_path"
         const val EXTRA_STATUS_PATH = "preview_profile_status_path"
+        const val EXTRA_CHURN_REQUESTS = "preview_profile_churn_requests"
 
         fun fromIntent(intent: Intent): PreviewInteractionAutomationRequest? {
             val paths = pathsFromValues(
@@ -49,9 +51,13 @@ internal data class PreviewInteractionAutomationRequest(
             return PreviewInteractionAutomationRequest(
                 intent = intent,
                 modelPath = paths.first,
-                statusPath = paths.second
+                statusPath = paths.second,
+                churnRequests = normalizeChurnRequests(intent.getIntExtra(EXTRA_CHURN_REQUESTS, 0))
             )
         }
+
+        fun normalizeChurnRequests(requests: Int): Int =
+            requests.coerceIn(0, MaxPreviewChurnRequests)
 
         fun pathsFromValues(
             action: String?,
@@ -189,8 +195,22 @@ private suspend fun MainActivity.runPreviewInteractionAutomation(
     delay(ProfileInteractionSettleMs)
 
     var secondReady = true
+    var churnReady = true
+    val churnRequests = request.churnRequests
     val secondRange = ranges.getOrNull(1)
-    if (secondRange != null) {
+    if (churnRequests > 0 && secondRange != null) {
+        val churnRanges = listOf(firstRange, secondRange)
+        repeat(churnRequests) { index ->
+            reloadToken++
+            queuePreviewRange(churnRanges[index % churnRanges.size], reloadToken)
+            view.setGcodeDisplayMode(
+                if (index % 2 == 0) GcodePreviewDisplayMode.FeatureType else GcodePreviewDisplayMode.Speed
+            )
+            delay(ProfileChurnRequestSpacingMs)
+        }
+        churnReady = waitForPreviewReady(nextReady)
+        delay(ProfileInteractionSettleMs)
+    } else if (secondRange != null) {
         reloadToken++
         queuePreviewRange(secondRange, reloadToken)
         secondReady = waitForPreviewReady(nextReady)
@@ -215,6 +235,8 @@ private suspend fun MainActivity.runPreviewInteractionAutomation(
             "secondRangeLayers=${secondRange?.layerCount() ?: 0} " +
             "firstReady=${if (firstReady) 1 else 0} " +
             "secondReady=${if (secondReady) 1 else 0} " +
+            "churnRequests=$churnRequests " +
+            "churnReady=${if (churnReady) 1 else 0} " +
             "metrics=${metrics.size} " +
             "maxNativeLoadMs=$maxNativeLoadMs " +
             "maxFirstFrameMs=$maxFirstFrameMs " +
@@ -223,7 +245,7 @@ private suspend fun MainActivity.runPreviewInteractionAutomation(
             "renderedFrames=$maxRenderedFrames " +
             "elapsedMs=$elapsedMs"
     )
-    return firstReady && secondReady && metrics.isNotEmpty()
+    return firstReady && secondReady && churnReady && metrics.isNotEmpty()
 }
 
 private data class PreviewProfileSlicePreparation(
@@ -325,4 +347,6 @@ private fun PreviewRangeSuggestion.layerCount(): Int =
     (endLayer - startLayer + 1).coerceAtLeast(0)
 
 private const val ProfileInteractionSettleMs = 450L
+private const val ProfileChurnRequestSpacingMs = 20L
 private const val ProfilePreviewReadyTimeoutMs = 15_000L
+private const val MaxPreviewChurnRequests = 40
