@@ -82,6 +82,7 @@ Usage:
   scripts/verify_android.sh profile-ui [serial]
   scripts/verify_android.sh responsiveness [serial]
   scripts/verify_android.sh responsiveness-slice [serial]
+  scripts/verify_android.sh responsiveness-heavy [serial]
   scripts/verify_android.sh perf [serial]
   scripts/verify_android.sh perf-heavy [serial]
   scripts/verify_android.sh benchy <local-stl-path> [serial]
@@ -124,6 +125,11 @@ Modes:
           Build, install, run the cube automation slice, and capture model-load,
           slice, preview planning, memory, and MobileSlicerPerf timing artifacts
           under artifacts/responsiveness-slice. Requires
+          MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
+  responsiveness-heavy
+          Build, install, run medium, complex, and stress fixture automation
+          slices, and capture per-case responsiveness artifacts under
+          artifacts/responsiveness-heavy. Requires
           MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
   perf    Build/install perfDebug, run non-UI startup and slicing benchmarks,
           write reports under artifacts/performance, and fail on hard budgets
@@ -575,17 +581,11 @@ PY
   log "Responsiveness profile artifacts: $artifact_dir"
 }
 
-run_responsiveness_slice_profile() {
+write_responsiveness_slice_report() {
   local serial="$1"
-  require_device_automation
-  require_automation_fixture "$DEFAULT_SLICE_SMOKE_STL" "default slice smoke STL"
-  local artifact_root="$ROOT_DIR/artifacts/responsiveness-slice"
-  local stamp
-  stamp="$(date +%Y%m%d-%H%M%S)"
-  local artifact_dir="$artifact_root/$stamp"
-  mkdir -p "$artifact_dir"
-
-  run_automation_slice "$DEFAULT_SLICE_SMOKE_STL" "$serial" "responsiveness-slice" "1" "$BENCHY_AUTOMATION_CONFIG" "1"
+  local stamp="$2"
+  local fixture="$3"
+  local artifact_dir="$4"
   adb_device "$serial" logcat -d -v time > "$artifact_dir/logcat.txt" 2>&1 || true
   grep -E 'MobileSlicerPerf|workspace_responsiveness|automation:' "$artifact_dir/logcat.txt" > "$artifact_dir/timing-logcat.txt" || true
   adb_device "$serial" logcat -b crash -d -v time > "$artifact_dir/crash-logcat.txt" 2>&1 || true
@@ -603,7 +603,7 @@ run_responsiveness_slice_profile() {
     printf '# MobileSlicer Responsiveness Slice Profile\n\n'
     printf -- '- serial: %s\n' "$serial"
     printf -- '- captured_at: %s\n' "$stamp"
-    printf -- '- fixture: %s\n' "$DEFAULT_SLICE_SMOKE_STL"
+    printf -- '- fixture: %s\n' "$fixture"
     printf -- '- gcode_bytes: %s\n\n' "${AUTOMATION_LAST_BYTES:-unknown}"
     printf '## Phase Timings\n\n'
     printf -- '- staging: %s ms\n' "${AUTOMATION_LAST_STAGING_MS:-unknown}"
@@ -631,7 +631,61 @@ run_responsiveness_slice_profile() {
       printf 'No timing events were captured.\n'
     fi
   } > "$artifact_dir/report.md"
+}
+
+run_responsiveness_slice_case() {
+  local serial="$1"
+  local fixture="$2"
+  local label="$3"
+  local should_install="$4"
+  local artifact_dir="$5"
+  local stamp="$6"
+  mkdir -p "$artifact_dir"
+
+  run_automation_slice "$fixture" "$serial" "$label" "$should_install" "$BENCHY_AUTOMATION_CONFIG" "1"
+  write_responsiveness_slice_report "$serial" "$stamp" "$fixture" "$artifact_dir"
   log "Responsiveness slice artifacts: $artifact_dir"
+}
+
+run_responsiveness_slice_profile() {
+  local serial="$1"
+  require_device_automation
+  require_automation_fixture "$DEFAULT_SLICE_SMOKE_STL" "default slice smoke STL"
+  local artifact_root="$ROOT_DIR/artifacts/responsiveness-slice"
+  local stamp
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  local artifact_dir="$artifact_root/$stamp"
+
+  run_responsiveness_slice_case "$serial" "$DEFAULT_SLICE_SMOKE_STL" "responsiveness-slice" "1" "$artifact_dir" "$stamp"
+}
+
+run_responsiveness_heavy_profile() {
+  local serial="$1"
+  require_device_automation
+  require_automation_fixture "$MEDIUM_SLICE_PERF_STL" "medium performance STL"
+  require_automation_fixture "$COMPLEX_SLICE_PERF_STL" "complex performance STL"
+  require_automation_fixture "$STRESS_SLICE_PERF_STL" "stress performance STL"
+  local artifact_root="$ROOT_DIR/artifacts/responsiveness-heavy"
+  local stamp
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  local artifact_dir="$artifact_root/$stamp"
+  mkdir -p "$artifact_dir"
+
+  install_apk "$serial"
+  run_responsiveness_slice_case "$serial" "$MEDIUM_SLICE_PERF_STL" "responsiveness-medium-speed-structure" "0" "$artifact_dir/medium-speed-structure" "$stamp"
+  run_responsiveness_slice_case "$serial" "$COMPLEX_SLICE_PERF_STL" "responsiveness-complex-vfa" "0" "$artifact_dir/complex-vfa" "$stamp"
+  run_responsiveness_slice_case "$serial" "$STRESS_SLICE_PERF_STL" "responsiveness-stress-temperature-tower" "0" "$artifact_dir/stress-temperature-tower" "$stamp"
+
+  {
+    printf '# MobileSlicer Heavy Responsiveness Profile\n\n'
+    printf -- '- serial: %s\n' "$serial"
+    printf -- '- captured_at: %s\n' "$stamp"
+    printf '\n## Case Reports\n\n'
+    printf -- '- medium-speed-structure: medium-speed-structure/report.md\n'
+    printf -- '- complex-vfa: complex-vfa/report.md\n'
+    printf -- '- stress-temperature-tower: stress-temperature-tower/report.md\n'
+  } > "$artifact_dir/report.md"
+  log "Heavy responsiveness artifacts: $artifact_dir"
 }
 
 stage_app_private_file() {
@@ -1529,6 +1583,9 @@ case "$mode" in
     ;;
   responsiveness-slice)
     run_responsiveness_slice_profile "$(device_serial "${2:-}")"
+    ;;
+  responsiveness-heavy)
+    run_responsiveness_heavy_profile "$(device_serial "${2:-}")"
     ;;
   perf)
     run_performance_gate "$(device_serial "${2:-}")"
