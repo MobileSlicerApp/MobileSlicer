@@ -30,12 +30,14 @@ internal class GcodePreviewRenderer {
         requestedLayerMax: Long,
         vertexBudget: Long = DefaultPreviewVertexBudget
     ): NativeEngineCallResult {
-        release()
-        val createdHandle = NativeGcodeViewerCalls.create()
+        val activeHandle = viewerHandle
+        val createdHandle = activeHandle ?: NativeGcodeViewerCalls.create()
             ?: return failure("nativeCreateGcodeViewer", "G-code preview renderer could not be created.")
         val engineHandle = NativeEngineHandle.fromRaw(engineRawHandle)
         if (engineHandle == null) {
-            NativeGcodeViewerCalls.destroy(createdHandle)
+            if (activeHandle == null) {
+                NativeGcodeViewerCalls.destroy(createdHandle)
+            }
             return failure("nativeLoadLatestSliceIntoGcodeViewer", "G-code preview source engine was unavailable.")
         }
 

@@ -941,6 +941,9 @@ static libvgcode::GCodeInputData to_vgcode_input_data_from_gcode_text(
         pending_layer_change = false;
         last_extrusion_z = z;
         have_extrusion_z = true;
+        if (layer_filter_enabled && static_cast<long>(layer_id) > max_layer) {
+            break;
+        }
         if (layer_filter_enabled &&
             (static_cast<long>(layer_id) < min_layer || static_cast<long>(layer_id) > max_layer)) {
             extrusion_path_open = false;

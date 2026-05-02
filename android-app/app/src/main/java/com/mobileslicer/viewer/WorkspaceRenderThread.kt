@@ -577,7 +577,6 @@ internal class WorkspaceRenderThread(
         }
 
         if (appliedGcodePreviewVersion != targetGcodePreviewVersion) {
-            releaseGcodeViewer()
             val previewEngineHandle = activeGcodePreviewEngineHandle
             val previewKey = activeGcodePreviewKey
             if (previewEngineHandle != 0L && previewKey > 0L) {
@@ -605,6 +604,8 @@ internal class WorkspaceRenderThread(
                 }
                 appliedGcodePathVisibilityVersion = -1L
                 appliedGcodeDisplayModeVersion = -1L
+            } else {
+                releaseGcodeViewer()
             }
             appliedGcodePreviewVersion = targetGcodePreviewVersion
         }
