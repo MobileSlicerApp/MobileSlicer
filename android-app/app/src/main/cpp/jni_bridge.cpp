@@ -490,16 +490,6 @@ Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeSlice(JNIEnv*, jclas
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeGetGcode(JNIEnv* env, jclass, jlong handle)
-{
-    if (handle == 0) {
-        return nullptr;
-    }
-
-    return new_nonempty_string(env, orca_get_gcode(engine_from_handle(handle)));
-}
-
-extern "C" JNIEXPORT jstring JNICALL
 Java_com_mobileslicer_nativebridge_NativeEngineBridge_nativeGetGcodeSummary(JNIEnv* env, jclass, jlong handle)
 {
     if (handle == 0) {

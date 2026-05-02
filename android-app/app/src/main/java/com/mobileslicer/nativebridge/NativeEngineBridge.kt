@@ -19,7 +19,6 @@ class NativeEngineBridge private constructor() {
         @JvmStatic external fun nativeSetModelTransform(handle: Long, xMm: Double, yMm: Double, zMm: Double, rotationXRadians: Double, rotationYRadians: Double, rotationZRadians: Double, uniformScale: Double): Boolean
         @JvmStatic external fun nativeSetConfigJson(handle: Long, json: String): Boolean
         @JvmStatic external fun nativeSlice(handle: Long): Boolean
-        @JvmStatic external fun nativeGetGcode(handle: Long): String?
         @JvmStatic external fun nativeGetGcodeSummary(handle: Long): String?
         @JvmStatic external fun nativeGetEnrichedGcodeSummary(handle: Long): String?
         @JvmStatic external fun nativeGetSliceMetrics(handle: Long): String?

@@ -232,7 +232,8 @@ Use the existing Android automation path plus wrapper stage logs for bounded sli
   * `sliceCurrentModel(...)`
   * `nativeSetConfigJson`
   * `nativeSlice`
-  * `nativeGetGcode`
+  * `nativeWriteGcodeToFile`
+  * `nativeGetGcodeSummary`
 * native wrapper hot path:
   * `config`
   * `prepare_model`
