@@ -44,7 +44,10 @@ import com.mobileslicer.profiles.SupportStyle
 import com.mobileslicer.profiles.SupportType
 import com.mobileslicer.profiles.TimelapseType
 import com.mobileslicer.profiles.activeConfiguration
+import com.mobileslicer.profiles.assetImageCache
 import com.mobileslicer.profiles.buildOrcaFilamentPickerRows
+import com.mobileslicer.profiles.filamentColor
+import com.mobileslicer.profiles.filamentColorCache
 import com.mobileslicer.profiles.filteredOrcaFilamentPickerRows
 import com.mobileslicer.profiles.isReplaceableOrcaGenericMaterialFor
 import com.mobileslicer.profiles.orcaFilamentCompatibleKeysCache
@@ -56,6 +59,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProfileModelsTest {
+    @Test
+    fun profileUiCachesAreBounded() {
+        synchronized(filamentColorCache) {
+            filamentColorCache.clear()
+            repeat(160) { index ->
+                filamentColor("#${index.toString(16).padStart(6, '0')}")
+            }
+            assertTrue(filamentColorCache.size <= 128)
+        }
+        synchronized(assetImageCache) {
+            assetImageCache.clear()
+            @Suppress("UNCHECKED_CAST")
+            val rawAssetImageCache = assetImageCache as MutableMap<String, Any?>
+            repeat(80) { index ->
+                rawAssetImageCache["asset_$index"] = null
+            }
+            assertTrue(assetImageCache.size <= 64)
+        }
+    }
+
     @Test
     fun filamentCompatibleKeyCacheIsBounded() {
         synchronized(orcaFilamentCompatibleKeysCache) {

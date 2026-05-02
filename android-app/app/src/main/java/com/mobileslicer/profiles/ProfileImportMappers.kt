@@ -268,7 +268,12 @@ internal fun JSONObject.profileConfigScalar(key: String): Any? {
     }
 }
 
-internal val filamentColorCache = Collections.synchronizedMap(mutableMapOf<String, Color>())
+internal val filamentColorCache = Collections.synchronizedMap(
+    object : LinkedHashMap<String, Color>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Color>?): Boolean =
+            size > 128
+    }
+)
 
 internal fun filamentColor(colorValue: String): Color {
     filamentColorCache[colorValue]?.let { return it }

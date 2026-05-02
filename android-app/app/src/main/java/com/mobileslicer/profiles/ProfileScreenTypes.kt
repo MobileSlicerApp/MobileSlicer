@@ -176,4 +176,9 @@ internal sealed interface OrcaPrinterListRow {
     data class Preset(val preset: OrcaPrinterPreset) : OrcaPrinterListRow
 }
 
-internal val assetImageCache = Collections.synchronizedMap(mutableMapOf<String, ImageBitmap>())
+internal val assetImageCache = Collections.synchronizedMap(
+    object : LinkedHashMap<String, ImageBitmap>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?): Boolean =
+            size > 64
+    }
+)
