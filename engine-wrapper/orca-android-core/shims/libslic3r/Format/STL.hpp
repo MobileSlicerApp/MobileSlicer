@@ -1,0 +1,6 @@
+#ifndef ORCA_ANDROID_CORE_LIBSLIC3R_FORMAT_STL_HPP
+#define ORCA_ANDROID_CORE_LIBSLIC3R_FORMAT_STL_HPP
+
+#include <admesh/stl.h>
+
+#endif

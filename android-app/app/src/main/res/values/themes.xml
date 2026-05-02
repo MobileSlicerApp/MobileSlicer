@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.MobileSlicer" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:navigationBarColor">#090C13</item>
+    </style>
+</resources>

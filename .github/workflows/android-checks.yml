@@ -1,0 +1,46 @@
+name: Android Checks
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+concurrency:
+  group: android-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify Android App
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make verification scripts executable
+        run: |
+          chmod +x android-app/gradlew
+          chmod +x scripts/verify_android.sh
+          chmod +x scripts/verify_stub_inventory.py
+
+      - name: Validate native stub inventory
+        run: scripts/verify_android.sh stubs
+
+      - name: Run Android lint
+        run: scripts/verify_android.sh lint
+
+      - name: Run JVM unit tests
+        run: scripts/verify_android.sh unit

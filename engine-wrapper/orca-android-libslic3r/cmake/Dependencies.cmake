@@ -1,0 +1,20 @@
+include_guard(GLOBAL)
+
+function(orca_android_append_prefix_if_exists prefix)
+    if (prefix AND EXISTS "${prefix}")
+        list(APPEND CMAKE_PREFIX_PATH "${prefix}")
+        set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
+    endif()
+endfunction()
+
+function(orca_android_require_file description path)
+    if (NOT EXISTS "${path}")
+        message(FATAL_ERROR "${description} not found: ${path}")
+    endif()
+endfunction()
+
+function(orca_android_require_directory description path)
+    if (NOT IS_DIRECTORY "${path}")
+        message(FATAL_ERROR "${description} not found: ${path}")
+    endif()
+endfunction()

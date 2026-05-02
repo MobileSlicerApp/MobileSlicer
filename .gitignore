@@ -1,0 +1,33 @@
+# Local tooling and editor state
+.android-sdk/
+.codex
+.codex/
+.claude/
+.idea/
+
+# Root build outputs
+/build/
+
+# Android/Gradle generated outputs
+/android-app/.gradle/
+/android-app/.kotlin/
+/android-app/app/build/
+/android-app/app/.cxx/
+/android-app/release-signing.properties
+hs_err*.log
+__pycache__/
+*.py[cod]
+
+# Generated native dependency build trees
+/engine-wrapper/orca-android-libslic3r/android-deps-build/
+/engine-wrapper/orca-android-libslic3r/android-deps-install/
+
+# Local artifact holding areas
+/_quarantine/
+/Website/private/
+*.apk
+*.gcode
+
+# OS noise
+.DS_Store
+Thumbs.db

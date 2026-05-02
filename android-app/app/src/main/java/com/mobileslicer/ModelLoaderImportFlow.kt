@@ -1,0 +1,185 @@
+package com.mobileslicer
+
+import com.mobileslicer.viewer.MeshBounds
+import com.mobileslicer.viewer.StlMesh
+import com.mobileslicer.viewer.ViewerModelTransform
+import com.mobileslicer.workspace.AppScreen
+import com.mobileslicer.workspace.ImportedModelFormat
+import com.mobileslicer.workspace.ModelImportTiming
+import com.mobileslicer.workspace.ModelLoadResult
+import com.mobileslicer.workspace.PlateObject
+import com.mobileslicer.workspace.WorkspacePreparationResult
+import com.mobileslicer.workspace.WorkspacePreparationTiming
+
+internal data class ModelLoaderLegacyModelState(
+    val modelLoaded: Boolean,
+    val modelLabel: String,
+    val modelFilePath: String?,
+    val importTiming: ModelImportTiming?,
+    val modelBounds: MeshBounds?,
+    val modelFormatName: String?
+)
+
+internal data class ModelLoaderImportApplication(
+    val loadedLabel: String,
+    val replacePlate: Boolean,
+    val clearSavedProject: Boolean,
+    val importedPlateObject: PlateObject?,
+    val nextPlateObjectId: Long,
+    val legacyState: ModelLoaderLegacyModelState?,
+    val shouldOpenWorkspace: Boolean,
+    val statusMessage: String
+)
+
+internal data class ModelLoaderWorkspacePreparationRequest(
+    val selectedObject: PlateObject?,
+    val modelFilePath: String,
+    val targetKey: String,
+    val importTiming: ModelImportTiming?
+) {
+    val selectedObjectId: Long? = selectedObject?.id
+}
+
+internal data class ModelLoaderPreparedLegacyState(
+    val preparedMesh: StlMesh?,
+    val modelBounds: MeshBounds?,
+    val viewerPreparationError: String?,
+    val workspacePreparationTiming: WorkspacePreparationTiming?
+)
+
+internal fun modelLoadResultLabel(result: ModelLoadResult): String =
+    result.message.lineSequence().drop(1).firstOrNull()?.ifBlank { "No model imported" }
+        ?: if (result.loaded) "Model ready" else "No model imported"
+
+internal fun planModelImportApplication(
+    result: ModelLoadResult,
+    currentScreen: AppScreen,
+    existingPlateObjects: List<PlateObject>,
+    appendRequested: Boolean,
+    nextPlateObjectId: Long,
+    defaultTransform: (Int) -> ViewerModelTransform
+): ModelLoaderImportApplication {
+    val loadedLabel = modelLoadResultLabel(result)
+    val shouldOpenWorkspace = result.loaded || result.format == ImportedModelFormat.ThreeMf
+    if (result.loaded && result.stagedFilePath != null && result.format == ImportedModelFormat.Stl) {
+        val shouldAppendToPlate = appendRequested || (currentScreen == AppScreen.Workspace && existingPlateObjects.isNotEmpty())
+        val retainedPlateObjects = if (shouldAppendToPlate) existingPlateObjects else emptyList()
+        val objectId = nextPlateObjectId
+        val reusableObject = retainedPlateObjects.firstOrNull { it.filePath == result.stagedFilePath }
+        val objectOnPlate = PlateObject(
+            id = objectId,
+            label = loadedLabel,
+            filePath = result.stagedFilePath,
+            nativeSourceKey = result.stagedFilePath,
+            filamentSlotIndex = 1,
+            format = result.format,
+            importTiming = result.loadTiming,
+            bounds = result.bounds,
+            mesh = reusableObject?.mesh,
+            viewerPreparationError = reusableObject?.viewerPreparationError,
+            workspacePreparationTiming = reusableObject?.workspacePreparationTiming,
+            transform = defaultTransform(retainedPlateObjects.size)
+        )
+        return ModelLoaderImportApplication(
+            loadedLabel = loadedLabel,
+            replacePlate = !shouldAppendToPlate,
+            clearSavedProject = !shouldAppendToPlate,
+            importedPlateObject = objectOnPlate,
+            nextPlateObjectId = objectId + 1L,
+            legacyState = null,
+            shouldOpenWorkspace = shouldOpenWorkspace,
+            statusMessage = result.message
+        )
+    }
+
+    return ModelLoaderImportApplication(
+        loadedLabel = loadedLabel,
+        replacePlate = false,
+        clearSavedProject = false,
+        importedPlateObject = null,
+        nextPlateObjectId = nextPlateObjectId,
+        legacyState = ModelLoaderLegacyModelState(
+            modelLoaded = result.loaded,
+            modelLabel = loadedLabel,
+            modelFilePath = result.stagedFilePath,
+            importTiming = result.loadTiming,
+            modelBounds = result.bounds,
+            modelFormatName = result.format?.name
+        ),
+        shouldOpenWorkspace = shouldOpenWorkspace,
+        statusMessage = result.message
+    )
+}
+
+internal fun resolveWorkspacePreparationRequest(
+    currentScreen: AppScreen,
+    modelLoaded: Boolean,
+    currentModelFilePath: String?,
+    currentModelFormatName: String?,
+    currentImportTiming: ModelImportTiming?,
+    selectedObject: PlateObject?,
+    currentPreparedMeshPresent: Boolean,
+    currentViewerPreparationError: String?,
+    inProgressTargetKey: String?
+): ModelLoaderWorkspacePreparationRequest? {
+    val modelFilePath = selectedObject?.filePath ?: currentModelFilePath ?: return null
+    val targetKey = workspacePreparationTargetKey(selectedObject, modelFilePath) ?: return null
+    if (currentScreen != AppScreen.Workspace) return null
+    if (!modelLoaded) return null
+    if (currentModelFormatName != ImportedModelFormat.Stl.name) return null
+    if (!shouldPrepareWorkspaceMesh(
+            selectedObject = selectedObject,
+            currentPreparedMeshPresent = currentPreparedMeshPresent,
+            currentViewerPreparationError = currentViewerPreparationError,
+            inProgressTargetKey = inProgressTargetKey,
+            targetKey = targetKey
+        )
+    ) {
+        return null
+    }
+    return ModelLoaderWorkspacePreparationRequest(
+        selectedObject = selectedObject,
+        modelFilePath = modelFilePath,
+        targetKey = targetKey,
+        importTiming = selectedObject?.importTiming ?: currentImportTiming
+    )
+}
+
+internal fun workspacePreparationTargetStillCurrent(
+    targetObjectId: Long?,
+    selectedPlateObjectId: Long?,
+    currentModelFilePath: String?,
+    modelFilePath: String
+): Boolean =
+    if (targetObjectId == null) {
+        currentModelFilePath == modelFilePath
+    } else {
+        selectedPlateObjectId == targetObjectId
+    }
+
+internal fun preparedLegacyState(
+    result: WorkspacePreparationResult,
+    currentModelBounds: MeshBounds?
+): ModelLoaderPreparedLegacyState =
+    ModelLoaderPreparedLegacyState(
+        preparedMesh = result.preparedMesh,
+        modelBounds = result.preparedMesh?.bounds ?: currentModelBounds,
+        viewerPreparationError = result.viewerPreparationError,
+        workspacePreparationTiming = result.timing
+    )
+
+internal fun applyWorkspacePreparationToPlateObject(
+    objectOnPlate: PlateObject,
+    modelFilePath: String,
+    result: WorkspacePreparationResult
+): PlateObject =
+    if (objectOnPlate.filePath == modelFilePath) {
+        objectOnPlate.copy(
+            bounds = result.preparedMesh?.bounds ?: objectOnPlate.bounds,
+            mesh = result.preparedMesh,
+            viewerPreparationError = result.viewerPreparationError,
+            workspacePreparationTiming = result.timing
+        )
+    } else {
+        objectOnPlate
+    }

@@ -1,0 +1,133 @@
+package com.mobileslicer
+
+import com.mobileslicer.profiles.ProfileStoreRepository
+import com.mobileslicer.viewer.MeshBounds
+import com.mobileslicer.viewer.PrinterBedSpec
+import com.mobileslicer.viewer.ViewerModelTransform
+import com.mobileslicer.workspace.ImportedModelFormat
+import com.mobileslicer.workspace.PlateFilamentSlot
+import com.mobileslicer.workspace.PlateObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class ModelLoaderPlateActionsTest {
+    @Test
+    fun removeFilamentSlotReindexesSlotsAndRemapsObjects() {
+        val slots = listOf(slot(1), slot(2), slot(3))
+        val objects = listOf(
+            plateObject(id = 1L, filamentSlotIndex = 1),
+            plateObject(id = 2L, filamentSlotIndex = 2),
+            plateObject(id = 3L, filamentSlotIndex = 3)
+        )
+
+        val mutation = removePlateFilamentSlot(
+            slots = slots,
+            objects = objects,
+            flushVolumes = null,
+            slotIndex = 2
+        )
+
+        assertTrue(mutation.changed)
+        assertEquals(listOf(1, 2), mutation.slots.map { it.index })
+        assertEquals(listOf(1, 1, 2), mutation.objects.map { it.filamentSlotIndex })
+    }
+
+    @Test
+    fun removePrimaryOrOnlyFilamentSlotIsIgnored() {
+        val mutation = removePlateFilamentSlot(
+            slots = listOf(slot(1)),
+            objects = listOf(plateObject(id = 1L, filamentSlotIndex = 1)),
+            flushVolumes = null,
+            slotIndex = 1
+        )
+
+        assertFalse(mutation.changed)
+        assertEquals(1, mutation.slots.single().index)
+    }
+
+    @Test
+    fun updateFilamentProfileKeepsPhysicalNozzleMapping() {
+        val replacement = ProfileStoreRepository.defaultFilamentProfiles().first()
+        val mutation = updatePlateFilamentSlotProfile(
+            slots = listOf(slot(1), slot(2, physicalNozzleIndex = 1)),
+            objects = emptyList(),
+            flushVolumes = null,
+            slotIndex = 2,
+            filament = replacement
+        )
+
+        assertEquals(replacement.id, mutation.slots[1].filamentProfileId)
+        assertEquals(1, mutation.slots[1].physicalNozzleIndex)
+    }
+
+    @Test
+    fun cloneSelectedObjectOffsetsAndAdvancesId() {
+        val (clone, nextId) = cloneSelectedPlateObject(
+            objects = listOf(plateObject(id = 5L, centerX = 190f, centerY = 190f)),
+            selectedPlateObjectId = 5L,
+            nextPlateObjectId = 8L,
+            bed = PrinterBedSpec(widthMm = 200f, depthMm = 200f, maxHeightMm = 180f)
+        )
+
+        checkNotNull(clone)
+        assertEquals(8L, clone.id)
+        assertEquals(200f, clone.transform.centerXmm)
+        assertEquals(200f, clone.transform.centerYmm)
+        assertEquals(9L, nextId)
+    }
+
+    @Test
+    fun deleteSelectedObjectSelectsNextNeighbor() {
+        val result = deleteSelectedPlateObject(
+            objects = listOf(plateObject(id = 1L), plateObject(id = 2L), plateObject(id = 3L)),
+            selectedPlateObjectId = 2L
+        )
+
+        assertTrue(result.changed)
+        assertEquals(listOf(1L, 3L), result.objects.map { it.id })
+        assertEquals(3L, result.nextSelection?.id)
+        assertEquals("Object removed\n2 on plate", result.statusMessage)
+    }
+
+    @Test
+    fun deleteOnlyObjectClearsSelection() {
+        val result = deleteSelectedPlateObject(
+            objects = listOf(plateObject(id = 1L)),
+            selectedPlateObjectId = 1L
+        )
+
+        assertTrue(result.changed)
+        assertNull(result.nextSelection)
+        assertEquals("No model loaded", result.statusMessage)
+    }
+
+    private fun slot(index: Int, physicalNozzleIndex: Int? = null): PlateFilamentSlot =
+        PlateFilamentSlot(
+            index = index,
+            filamentProfileId = "filament_$index",
+            label = "Filament $index",
+            materialType = "PLA",
+            colorHex = "#8FC1FF",
+            physicalNozzleIndex = physicalNozzleIndex
+        )
+
+    private fun plateObject(
+        id: Long,
+        filamentSlotIndex: Int = 1,
+        centerX: Float = 100f,
+        centerY: Float = 100f
+    ): PlateObject =
+        PlateObject(
+            id = id,
+            label = "object_$id",
+            filePath = "/tmp/object_$id.stl",
+            filamentSlotIndex = filamentSlotIndex,
+            format = ImportedModelFormat.Stl,
+            importTiming = null,
+            bounds = MeshBounds(0f, 0f, 0f, 10f, 10f, 10f),
+            transform = ViewerModelTransform(centerXmm = centerX, centerYmm = centerY)
+        )
+}

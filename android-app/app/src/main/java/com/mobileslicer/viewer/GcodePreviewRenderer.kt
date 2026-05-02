@@ -1,0 +1,136 @@
+package com.mobileslicer.viewer
+
+import com.mobileslicer.nativebridge.NativeEngineCallResult
+import com.mobileslicer.nativebridge.NativeEngineError
+import com.mobileslicer.nativebridge.NativeEngineErrorCode
+import com.mobileslicer.nativebridge.NativeEngineHandle
+import com.mobileslicer.nativebridge.NativeGcodeViewerCalls
+import com.mobileslicer.nativebridge.NativeGcodeViewerHandle
+
+internal val DefaultPreviewVertexBudget: Long = GcodePreviewPerformanceMode.Default.vertexBudget
+
+internal data class GcodePreviewLoadState(
+    val loadedLayerStart: Long,
+    val loadedLayerEnd: Long,
+    val localLayerMin: Long,
+    val localLayerMax: Long
+)
+
+internal class GcodePreviewRenderer {
+    private var viewerHandle: NativeGcodeViewerHandle? = null
+    private var loadedLayerStart: Long = 0L
+    private var loadedLayerEnd: Long = Long.MAX_VALUE
+
+    val isActive: Boolean
+        get() = viewerHandle != null
+
+    fun loadLatestSlice(
+        engineRawHandle: Long,
+        requestedLayerMin: Long,
+        requestedLayerMax: Long,
+        vertexBudget: Long = DefaultPreviewVertexBudget
+    ): NativeEngineCallResult {
+        release()
+        val createdHandle = NativeGcodeViewerCalls.create()
+            ?: return failure("nativeCreateGcodeViewer", "G-code preview renderer could not be created.")
+        val engineHandle = NativeEngineHandle.fromRaw(engineRawHandle)
+        if (engineHandle == null) {
+            NativeGcodeViewerCalls.destroy(createdHandle)
+            return failure("nativeLoadLatestSliceIntoGcodeViewer", "G-code preview source engine was unavailable.")
+        }
+
+        viewerHandle = createdHandle
+        val loadResult = NativeGcodeViewerCalls.loadLatestSlice(
+            handle = createdHandle,
+            engineHandle = engineHandle,
+            minLayer = requestedLayerMin,
+            maxLayer = requestedLayerMax,
+            lodHint = vertexBudget.coerceIn(1L, GcodePreviewPerformanceMode.HARD_VERTEX_CEILING).toInt()
+        )
+        if (loadResult is NativeEngineCallResult.Success) {
+            loadedLayerStart = requestedLayerMin
+            loadedLayerEnd = requestedLayerMax
+        } else {
+            release()
+        }
+        return loadResult
+    }
+
+    fun currentLoadState(requestedLayerMin: Long, requestedLayerMax: Long): GcodePreviewLoadState =
+        GcodePreviewLoadState(
+            loadedLayerStart = requestedLayerMin,
+            loadedLayerEnd = requestedLayerMax,
+            localLayerMin = 0L,
+            localLayerMax = (requestedLayerMax - requestedLayerMin).coerceAtLeast(0L)
+        )
+
+    fun setVisibleLayerRange(globalLayerMin: Long, globalLayerMax: Long): NativeEngineCallResult {
+        val handle = viewerHandle ?: return NativeEngineCallResult.Success
+        val loadedLayerSpan = (loadedLayerEnd - loadedLayerStart).coerceAtLeast(0L)
+        val localLayerMin = (globalLayerMin - loadedLayerStart).coerceIn(0L, loadedLayerSpan)
+        val localLayerMax = (globalLayerMax - loadedLayerStart)
+            .coerceAtLeast(localLayerMin)
+            .coerceAtMost(loadedLayerSpan)
+        return NativeGcodeViewerCalls.setLayerRange(handle, localLayerMin, localLayerMax)
+    }
+
+    fun setPathVisibility(kind: Int, id: Int, visible: Boolean): NativeEngineCallResult {
+        val handle = viewerHandle ?: return NativeEngineCallResult.Success
+        return NativeGcodeViewerCalls.setPathVisibility(handle, kind, id, visible)
+    }
+
+    fun setDisplayMode(mode: GcodePreviewDisplayMode): NativeEngineCallResult {
+        val handle = viewerHandle ?: return NativeEngineCallResult.Success
+        return NativeGcodeViewerCalls.setViewType(handle, mode.nativeId)
+    }
+
+    fun render(viewMatrix: FloatArray, projectionMatrix: FloatArray): NativeEngineCallResult {
+        val handle = viewerHandle
+            ?: return failure("nativeRenderGcodeViewer", "G-code preview renderer is not active.")
+        return NativeGcodeViewerCalls.render(handle, viewMatrix, projectionMatrix)
+    }
+
+    fun release() {
+        val handle = viewerHandle ?: return
+        NativeGcodeViewerCalls.shutdown(handle)
+        NativeGcodeViewerCalls.destroy(handle)
+        viewerHandle = null
+        loadedLayerStart = 0L
+        loadedLayerEnd = Long.MAX_VALUE
+    }
+
+    private fun failure(operation: String, message: String): NativeEngineCallResult.Failure =
+        NativeEngineCallResult.Failure(
+            operation = operation,
+            error = NativeEngineError(
+                code = NativeEngineErrorCode.Unknown,
+                message = message
+            )
+        )
+}
+
+internal fun parsePreviewRangePlan(plan: String?): List<PreviewRangeSuggestion> {
+    if (plan.isNullOrBlank()) {
+        return emptyList()
+    }
+    return plan.split(';')
+        .mapNotNull { rawRange ->
+            val parts = rawRange.trim().split('-', limit = 2)
+            if (parts.size != 2) {
+                return@mapNotNull null
+            }
+            val startZeroBased = parts[0].trim().toLongOrNull() ?: return@mapNotNull null
+            val endZeroBased = parts[1].trim().toLongOrNull() ?: return@mapNotNull null
+            if (startZeroBased < 0L || endZeroBased < startZeroBased) {
+                return@mapNotNull null
+            }
+            PreviewRangeSuggestion(
+                startLayer = (startZeroBased + 1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                endLayer = (endZeroBased + 1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                label = ""
+            )
+        }
+        .mapIndexed { index, range ->
+            range.copy(label = "Range ${index + 1}")
+        }
+}

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-04-27",
+  "notes": [
+    "This inventory describes intentional Android Orca subset stubs.",
+    "A surfaced product feature that depends on a blocked subsystem must either link the real Orca implementation or stay documented as blocked/config-only."
+  ],
+  "files": [
+    {
+      "path": "engine-wrapper/orca-android-libslic3r/android_libslic3r_stubs.cpp",
+      "classification": "compatibility_shims",
+      "allowedProductScope": "Config/export helpers and non-product debug/image paths.",
+      "blockedProductAreas": [
+        "Voronoi/MedialAxis-dependent geometry behavior if surfaced directly",
+        "Non-PNG native G-code thumbnail generation"
+      ],
+      "symbols": [
+        "Slic3r::Geometry::MedialAxis",
+        "Slic3r::header_slic3r_generated",
+        "Slic3r::is_gcode_file",
+        "Slic3r::is_json_file",
+        "Slic3r::GCodeThumbnails::make_and_check_thumbnail_list",
+        "Slic3r::GCodeThumbnails::get_error_string"
+      ]
+    },
+    {
+      "path": "engine-wrapper/orca-android-libslic3r/android_libslic3r_model_stubs.cpp",
+      "classification": "unsupported_feature_gates",
+      "allowedProductScope": "Current Android STL-only model-load path and runtime temporary directory shim.",
+      "blockedProductAreas": [
+        "3MF import",
+        "OBJ import",
+        "AMF import",
+        "SVG import",
+        "STEP import",
+        "DRC import",
+        "mesh boolean/cut workflows",
+        "facet painting or face-selection state",
+        "model backup/save helpers outside the accepted Android project path"
+      ],
+      "symbols": [
+        "Slic3r::load_obj",
+        "Slic3r::load_svg",
+        "Slic3r::load_drc",
+        "Slic3r::load_amf",
+        "Slic3r::load_bbs_3mf",
+        "Slic3r::load_3mf",
+        "Slic3r::Step",
+        "Slic3r::MeshBoolean::mcut::make_boolean",
+        "Slic3r::TriangleSelector",
+        "Slic3r::temporary_dir"
+      ]
+    },
+    {
+      "path": "engine-wrapper/orca-android-libslic3r/android_libslic3r_remaining_print_stubs.cpp",
+      "classification": "mixed_print_compatibility_layer",
+      "allowedProductScope": "Single/normal-material Android print/export paths where linked real Orca sources own the exercised behavior.",
+      "blockedProductAreas": [
+        "wipe tower and prime tower functional proof",
+        "paint-based multimaterial segmentation",
+        "paint-based fuzzy-skin segmentation",
+        "interlocking infill",
+        "SVG/PNG debug export helpers"
+      ],
+      "symbols": [
+        "Slic3r::resources_dir",
+        "Slic3r::log_memory_info",
+        "Slic3r::SVG",
+        "Slic3r::GCodeProcessor",
+        "Slic3r::WipeTower",
+        "Slic3r::WipeTower2",
+        "Slic3r::multi_material_segmentation_by_painting",
+        "Slic3r::fuzzy_skin_segmentation_by_painting"
+      ],
+      "realProductAreas": [
+        "non-painted fuzzy-skin perimeter generation via Feature/FuzzySkin/FuzzySkin.cpp"
+      ]
+    }
+  ]
+}

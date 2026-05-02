@@ -1,0 +1,368 @@
+diff --git a/vendor/orcaslicer/src/libslic3r/PerimeterGenerator.cpp b/vendor/orcaslicer/src/libslic3r/PerimeterGenerator.cpp
+index 1fa4d58b..ec26ed78 100644
+--- a/vendor/orcaslicer/src/libslic3r/PerimeterGenerator.cpp
++++ b/vendor/orcaslicer/src/libslic3r/PerimeterGenerator.cpp
+@@ -19,6 +19,7 @@
+ #include <thread>
+ #include "libslic3r/AABBTreeLines.hpp"
+ #include "Print.hpp"
++
+ static const int overhang_sampling_number = 6;
+ static const double narrow_loop_length_threshold = 10;
+ //BBS: when the width of expolygon is smaller than
+@@ -27,7 +28,6 @@ static const double narrow_loop_length_threshold = 10;
+ static constexpr double SMALLER_EXT_INSET_OVERLAP_TOLERANCE = 0.22;
+ 
+ namespace Slic3r {
+-    
+ using namespace Slic3r::Feature::FuzzySkin;
+ 
+ // Hierarchy of perimeters.
+@@ -2159,15 +2159,32 @@ void PerimeterGenerator::process_arachne()
+         //PS: One wall top surface for Arachne
+         ExPolygons top_expolygons;
+         // Calculate how many inner loops remain when TopSurfaces is selected.
+-        const int inner_loop_number = (config->only_one_wall_top && upper_slices != nullptr) ? loop_number - 1 : -1;
++        bool single_top_surface_mode = config->only_one_wall_top && loop_number > 0 && upper_slices != nullptr;
++        int inner_loop_number = single_top_surface_mode ? loop_number - 1 : -1;
++        Polygons upper_slices_clipped;
++        bool has_upper_slices_clipped = false;
++
++        Polygons   last_p = to_polygons(last);
++        BoundingBox current_slice_bbox = get_extents(last);
++        current_slice_bbox.offset(SCALED_EPSILON);
++        if (single_top_surface_mode) {
++            if (object_config->interface_shells) {
++                auto upper_slicer_same_region = to_expolygons(this->upper_slices_same_region->surfaces);
++                upper_slices_clipped = ClipperUtils::clip_clipper_polygons_with_subject_bbox(upper_slicer_same_region, current_slice_bbox);
++            } else {
++                upper_slices_clipped = ClipperUtils::clip_clipper_polygons_with_subject_bbox(*upper_slices, current_slice_bbox);
++            }
++            has_upper_slices_clipped = true;
++            if (diff_ex(last, upper_slices_clipped).empty()) {
++                single_top_surface_mode = false;
++                inner_loop_number = -1;
++            }
++        }
+ 
+         // Set one perimeter when TopSurfaces is selected.
+-        if (config->only_one_wall_top && loop_number > 0)
++        if (single_top_surface_mode)
+             loop_number = 0;
+-
+         Arachne::WallToolPathsParams input_params_tmp = input_params;
+-        
+-        Polygons   last_p = to_polygons(last);
+         Arachne::WallToolPaths wallToolPaths(last_p, bead_width_0, perimeter_spacing, coord_t(loop_number + 1),
+                                                wall_0_inset, layer_height, input_params_tmp);
+         std::vector<Arachne::VariableWidthLines>   perimeters = wallToolPaths.getToolPaths();
+@@ -2185,12 +2202,15 @@ void PerimeterGenerator::process_arachne()
+             coord_t perimeter_width = this->perimeter_flow.scaled_width();
+ 
+             // Get top ExPolygons from current infill contour.
+-            Polygons upper_slices_clipped;
+-            if (object_config->interface_shells) {
+-                auto upper_slicer_same_region = to_expolygons(this->upper_slices_same_region->surfaces);
+-                upper_slices_clipped = ClipperUtils::clip_clipper_polygons_with_subject_bbox(upper_slicer_same_region, infill_contour_bbox);
+-            } else
+-                upper_slices_clipped = ClipperUtils::clip_clipper_polygons_with_subject_bbox(*upper_slices, infill_contour_bbox);
++            if (!has_upper_slices_clipped) {
++                if (object_config->interface_shells) {
++                    auto upper_slicer_same_region = to_expolygons(this->upper_slices_same_region->surfaces);
++                    upper_slices_clipped = ClipperUtils::clip_clipper_polygons_with_subject_bbox(upper_slicer_same_region, infill_contour_bbox);
++                } else {
++                    upper_slices_clipped = ClipperUtils::clip_clipper_polygons_with_subject_bbox(*upper_slices, infill_contour_bbox);
++                }
++                has_upper_slices_clipped = true;
++            }
+ 
+             top_expolygons = diff_ex(infill_contour, upper_slices_clipped);
+ 
+diff --git a/vendor/orcaslicer/src/libvgcode/include/Viewer.hpp b/vendor/orcaslicer/src/libvgcode/include/Viewer.hpp
+index 817b6ef5..bc0de429 100644
+--- a/vendor/orcaslicer/src/libvgcode/include/Viewer.hpp
++++ b/vendor/orcaslicer/src/libvgcode/include/Viewer.hpp
+@@ -7,6 +7,7 @@
+ 
+ #include "Types.hpp"
+ 
++#include <cstddef>
+ #include <string>
+ 
+ namespace libvgcode {
+@@ -56,6 +57,14 @@ public:
+     //
+     void load(GCodeInputData&& gcode_data);
+     //
++    // Setup the viewer content from a layer range in the given data without
++    // requiring the caller to materialize a filtered GCodeInputData first.
++    // Returns the count of selected vertices. If the count is zero or reaches
++    // max_vertices, the viewer contents are left unchanged so callers can
++    // preserve existing empty/error and LOD fallback behavior.
++    //
++    size_t load_layer_range(const GCodeInputData& gcode_data, long min_layer, long max_layer, size_t max_vertices);
++    //
+     // Render the toolpaths according to the current settings and
+     // using the given camera matrices.
+     //
+@@ -214,6 +223,13 @@ public:
+     //
+     void set_wipes_radius(float radius);
+     //
++    // Scale extrusion segment widths for preview display.
++    // This is useful for zoomed-out mobile rendering where dense paths
++    // otherwise collapse into heavy moire/overdraw.
++    //
++    float get_extrusion_width_scale() const;
++    void set_extrusion_width_scale(float scale);
++    //
+     // Return the count of detected layers.
+     //
+     size_t get_layers_count() const;
+diff --git a/vendor/orcaslicer/src/libvgcode/src/Viewer.cpp b/vendor/orcaslicer/src/libvgcode/src/Viewer.cpp
+index 612a1ed0..bfabaefd 100644
+--- a/vendor/orcaslicer/src/libvgcode/src/Viewer.cpp
++++ b/vendor/orcaslicer/src/libvgcode/src/Viewer.cpp
+@@ -37,6 +37,11 @@ void Viewer::load(GCodeInputData&& gcode_data)
+     m_impl->load(std::move(gcode_data));
+ }
+ 
++size_t Viewer::load_layer_range(const GCodeInputData& gcode_data, long min_layer, long max_layer, size_t max_vertices)
++{
++    return m_impl->load_layer_range(gcode_data, min_layer, max_layer, max_vertices);
++}
++
+ void Viewer::render(const Mat4x4& view_matrix, const Mat4x4& projection_matrix)
+ {
+     m_impl->render(view_matrix, projection_matrix);
+@@ -182,6 +187,16 @@ void Viewer::set_wipes_radius(float radius)
+     m_impl->set_wipes_radius(radius);
+ }
+ 
++float Viewer::get_extrusion_width_scale() const
++{
++    return m_impl->get_extrusion_width_scale();
++}
++
++void Viewer::set_extrusion_width_scale(float scale)
++{
++    m_impl->set_extrusion_width_scale(scale);
++}
++
+ size_t Viewer::get_layers_count() const
+ {
+     return m_impl->get_layers_count();
+diff --git a/vendor/orcaslicer/src/libvgcode/src/ViewerImpl.cpp b/vendor/orcaslicer/src/libvgcode/src/ViewerImpl.cpp
+index 4732c042..218088f0 100644
+--- a/vendor/orcaslicer/src/libvgcode/src/ViewerImpl.cpp
++++ b/vendor/orcaslicer/src/libvgcode/src/ViewerImpl.cpp
+@@ -906,9 +906,13 @@ void ViewerImpl::reset()
+ // https://github.com/prusa3d/PrusaSlicer/issues/12908
+ // To let all drivers be happy, we use GL_RGBA32F format, so we need to add an extra (currently unused) float
+ // to position and heights_widths_angles vectors
++#ifdef ENABLE_OPENGL_ES
++using Vec4 = Vec3;
++#else
+ using Vec4 = std::array<float, 4>;
++#endif
+ 
+-static void extract_pos_and_or_hwa(const std::vector<PathVertex>& vertices, float travels_radius, float wipes_radius, BitSet<>& valid_lines_bitset,
++static void extract_pos_and_or_hwa(const std::vector<PathVertex>& vertices, float travels_radius, float wipes_radius, float extrusion_width_scale, BitSet<>& valid_lines_bitset,
+     std::vector<Vec4>* positions = nullptr, std::vector<Vec4>* heights_widths_angles = nullptr, bool update_bitset = false) {
+   static constexpr const Vec3 ZERO = { 0.0f, 0.0f, 0.0f };
+     if (positions == nullptr && heights_widths_angles == nullptr)
+@@ -943,8 +947,12 @@ static void extract_pos_and_or_hwa(const std::vector<PathVertex>& vertices, floa
+         }
+         
+         if (positions != nullptr) {
++#ifdef ENABLE_OPENGL_ES
++            Vec4 position = { v.position[0], v.position[1], v.position[2] };
++#else
+             // the last component is a dummy float to comply with GL_RGBA32F format
+             Vec4 position = { v.position[0], v.position[1], v.position[2], 0.0f };
++#endif
+             if (move_type == EMoveType::Extrude)
+                 // push down extrusion vertices by half height to render them at the right z
+                 position[2] -= 0.5f * v.height;
+@@ -963,8 +971,8 @@ static void extract_pos_and_or_hwa(const std::vector<PathVertex>& vertices, floa
+                 width  = wipes_radius;
+             }
+             else {
+-                height = v.height;
+-                width = v.width;
++                height = v.height * extrusion_width_scale;
++                width = v.width * extrusion_width_scale;
+             }
+             
+             // ORCA: Set bias for wipes and options to avoid z-fighting
+@@ -976,8 +984,13 @@ static void extract_pos_and_or_hwa(const std::vector<PathVertex>& vertices, floa
+ 
+             // the last component is a dummy float to comply with GL_RGBA32F format
+             // ORCA: Pass bias to shader
++#ifdef ENABLE_OPENGL_ES
++            heights_widths_angles->push_back({ height, width,
++                std::atan2(prev_line[0] * this_line[1] - prev_line[1] * this_line[0], dot(prev_line, this_line)) });
++#else
+             heights_widths_angles->push_back({ height, width,
+                 std::atan2(prev_line[0] * this_line[1] - prev_line[1] * this_line[0], dot(prev_line, this_line)), bias });
++#endif
+         }
+     }
+ }
+@@ -990,14 +1003,63 @@ void ViewerImpl::load(GCodeInputData&& gcode_data)
+     if (gcode_data.vertices.empty())
+         return;
+ 
++    load_vertices(
++        std::move(gcode_data.vertices),
++        std::move(gcode_data.tools_colors),
++        std::move(gcode_data.color_print_colors),
++        gcode_data.spiral_vase_mode);
++}
++
++size_t ViewerImpl::load_layer_range(const GCodeInputData& gcode_data, long min_layer, long max_layer, size_t max_vertices)
++{
++    if (!m_initialized || gcode_data.vertices.empty())
++        return 0;
++
++    const bool layer_filter_enabled = min_layer >= 0 && max_layer >= min_layer;
++    const bool limit_enabled = max_vertices > 0;
++    size_t selected_vertices = 0;
++    for (const PathVertex& source_vertex : gcode_data.vertices) {
++        const long layer_id = static_cast<long>(source_vertex.layer_id);
++        if (!layer_filter_enabled || (layer_id >= min_layer && layer_id <= max_layer)) {
++            ++selected_vertices;
++            if (limit_enabled && selected_vertices >= max_vertices)
++                return selected_vertices;
++        }
++    }
++
++    if (selected_vertices == 0)
++        return 0;
++
++    std::vector<PathVertex> vertices;
++    vertices.reserve(selected_vertices);
++    for (const PathVertex& source_vertex : gcode_data.vertices) {
++        const long layer_id = static_cast<long>(source_vertex.layer_id);
++        if (layer_filter_enabled && (layer_id < min_layer || layer_id > max_layer))
++            continue;
++
++        PathVertex vertex = source_vertex;
++        if (layer_filter_enabled)
++            vertex.layer_id = static_cast<uint32_t>(layer_id - min_layer);
++        vertices.emplace_back(vertex);
++    }
++
++    load_vertices(std::move(vertices), Palette(gcode_data.tools_colors), Palette(gcode_data.color_print_colors), gcode_data.spiral_vase_mode);
++    return selected_vertices;
++}
++
++void ViewerImpl::load_vertices(std::vector<PathVertex>&& vertices, Palette&& tools_colors, Palette&& color_print_colors, bool spiral_vase_mode)
++{
++    if (vertices.empty())
++        return;
++
+     reset();
+ 
+-    m_vertices = std::move(gcode_data.vertices);
+-    m_tool_colors = std::move(gcode_data.tools_colors);
+-    m_color_print_colors = std::move(gcode_data.color_print_colors);
++    m_vertices = std::move(vertices);
++    m_tool_colors = std::move(tools_colors);
++    m_color_print_colors = std::move(color_print_colors);
+     m_vertices_colors.resize(m_vertices.size());
+ 
+-    m_settings.spiral_vase_mode = gcode_data.spiral_vase_mode;
++    m_settings.spiral_vase_mode = spiral_vase_mode;
+ 
+     for (size_t i = 0; i < m_vertices.size(); ++i) {
+         const PathVertex& v = m_vertices[i];
+@@ -1068,7 +1130,7 @@ void ViewerImpl::load(GCodeInputData&& gcode_data)
+     std::vector<Vec4> heights_widths_angles;
+     positions.reserve(m_vertices.size());
+     heights_widths_angles.reserve(m_vertices.size());
+-    extract_pos_and_or_hwa(m_vertices, m_travels_radius, m_wipes_radius, m_valid_lines_bitset, &positions, &heights_widths_angles, true);
++    extract_pos_and_or_hwa(m_vertices, m_travels_radius, m_wipes_radius, m_extrusion_width_scale, m_valid_lines_bitset, &positions, &heights_widths_angles, true);
+ 
+     if (!positions.empty()) {
+ #ifdef ENABLE_OPENGL_ES
+@@ -1639,6 +1701,15 @@ void ViewerImpl::set_wipes_radius(float radius)
+     update_heights_widths();
+ }
+ 
++void ViewerImpl::set_extrusion_width_scale(float scale)
++{
++    const float clamped_scale = std::clamp(scale, 0.20f, 1.25f);
++    if (std::abs(m_extrusion_width_scale - clamped_scale) < 0.01f)
++        return;
++    m_extrusion_width_scale = clamped_scale;
++    update_heights_widths();
++}
++
+ size_t ViewerImpl::get_used_cpu_memory() const
+ {
+     size_t ret = sizeof(*this);
+@@ -1852,7 +1923,7 @@ void ViewerImpl::update_heights_widths()
+ #ifdef ENABLE_OPENGL_ES
+     std::vector<Vec3> heights_widths_angles;
+     heights_widths_angles.reserve(m_vertices.size());
+-    extract_pos_and_or_hwa(m_vertices, m_travels_radius, m_wipes_radius, m_valid_lines_bitset, nullptr, &heights_widths_angles);
++    extract_pos_and_or_hwa(m_vertices, m_travels_radius, m_wipes_radius, m_extrusion_width_scale, m_valid_lines_bitset, nullptr, &heights_widths_angles);
+     m_texture_data.set_heights_widths_angles(heights_widths_angles);
+ #else
+     if (m_heights_widths_angles_buf_id == 0)
+diff --git a/vendor/orcaslicer/src/libvgcode/src/ViewerImpl.hpp b/vendor/orcaslicer/src/libvgcode/src/ViewerImpl.hpp
+index 428815d2..5b26ec79 100644
+--- a/vendor/orcaslicer/src/libvgcode/src/ViewerImpl.hpp
++++ b/vendor/orcaslicer/src/libvgcode/src/ViewerImpl.hpp
+@@ -21,6 +21,7 @@
+ #include "ExtrusionRoles.hpp"
+ 
+ #include <string>
++#include <cstddef>
+ #include <optional>
+ 
+ namespace libvgcode {
+@@ -54,6 +55,7 @@ public:
+     // from the given gcode data.
+     //
+     void load(GCodeInputData&& gcode_data);
++    size_t load_layer_range(const GCodeInputData& gcode_data, long min_layer, long max_layer, size_t max_vertices);
+ 
+     //
+     // Update the visibility property of toolpaths in dependence
+@@ -170,6 +172,8 @@ public:
+     void set_travels_radius(float radius);
+     float get_wipes_radius() const { return m_wipes_radius; }
+     void set_wipes_radius(float radius);
++    float get_extrusion_width_scale() const { return m_extrusion_width_scale; }
++    void set_extrusion_width_scale(float scale);
+ 
+     size_t get_used_cpu_memory() const;
+     size_t get_used_gpu_memory() const;
+@@ -237,6 +241,10 @@ private:
+     //
+     float m_wipes_radius{ DEFAULT_WIPES_RADIUS_MM };
+     //
++    // Android preview zoom compensation for extrusion segment widths
++    //
++    float m_extrusion_width_scale{ 1.0f };
++    //
+     // Palette used to render extrusion roles
+     //
+     std::array<Color, size_t(EGCodeExtrusionRole::COUNT)> m_extrusion_roles_colors;
+@@ -459,6 +467,7 @@ private:
+     void update_view_full_range();
+     void update_color_ranges();
+     void update_heights_widths();
++    void load_vertices(std::vector<PathVertex>&& vertices, Palette&& tools_colors, Palette&& color_print_colors, bool spiral_vase_mode);
+     void render_segments(const Mat4x4& view_matrix, const Mat4x4& projection_matrix, const Vec3& camera_position);
+     void render_options(const Mat4x4& view_matrix, const Mat4x4& projection_matrix);
+ #if VGCODE_ENABLE_COG_AND_TOOL_MARKERS
+@@ -469,4 +478,4 @@ private:
+ 
+ } // namespace libvgcode
+ 
+-#endif // VGCODE_VIEWERIMPL_HPP
+\ No newline at end of file
++#endif // VGCODE_VIEWERIMPL_HPP
