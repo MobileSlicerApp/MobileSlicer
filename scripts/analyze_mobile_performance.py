@@ -28,6 +28,7 @@ REGRESSION_METRIC_GROUPS = {
     "native_load_ms": "slice",
     "native_slice_ms": "slice",
     "write_gcode_ms": "slice",
+    "preview_plan_ms": "slice",
     "preview_cache_build_ms": "slice",
     "preview_moves": "output",
     "preview_cached_vertices": "output",
@@ -148,13 +149,13 @@ def build_markdown(records: list[dict[str, Any]], failures: list[str]) -> str:
                 "",
                 "## Slice Phases",
                 "",
-                "| Name | Fixture bytes | Stage ms | Native load ms | Placement ms | Config ms | Native slice ms | Write G-code ms | Preview moves | Preview vertices | Preview cache ms | Total ms |",
-                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                "| Name | Fixture bytes | Stage ms | Native load ms | Placement ms | Config ms | Native slice ms | Write G-code ms | Preview plan ms | Preview moves | Preview vertices | Preview cache ms | Total ms |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for record in slice_records:
             lines.append(
-                "| {name} | {fixture_bytes} | {stage} | {native_load} | {placement} | {config} | {native_slice} | {write_gcode} | {preview_moves} | {preview_vertices} | {preview_cache_ms} | {elapsed} |".format(
+                "| {name} | {fixture_bytes} | {stage} | {native_load} | {placement} | {config} | {native_slice} | {write_gcode} | {preview_plan_ms} | {preview_moves} | {preview_vertices} | {preview_cache_ms} | {elapsed} |".format(
                     name=record.get("name", ""),
                     fixture_bytes=record.get("fixture_bytes", ""),
                     stage=record.get("staging_ms", ""),
@@ -163,6 +164,7 @@ def build_markdown(records: list[dict[str, Any]], failures: list[str]) -> str:
                     config=record.get("config_ms", ""),
                     native_slice=record.get("native_slice_ms", ""),
                     write_gcode=record.get("write_gcode_ms", ""),
+                    preview_plan_ms=record.get("preview_plan_ms", ""),
                     preview_moves=record.get("preview_moves", ""),
                     preview_vertices=record.get("preview_cached_vertices", ""),
                     preview_cache_ms=record.get("preview_cache_build_ms", ""),
@@ -208,8 +210,8 @@ def build_baseline_markdown(records: list[dict[str, Any]], baseline: dict[str, d
     lines = [
         "## Baseline Comparison",
         "",
-        "| Name | Slice ms delta | PSS KB delta | Native heap KB delta | Java heap KB delta | Bytes delta | Preview moves delta |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Name | Slice ms delta | Preview plan ms delta | PSS KB delta | Native heap KB delta | Java heap KB delta | Bytes delta | Preview moves delta |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     rows = 0
     for record in records:
@@ -221,9 +223,13 @@ def build_baseline_markdown(records: list[dict[str, Any]], baseline: dict[str, d
             continue
         rows += 1
         lines.append(
-            "| {name} | {elapsed} | {pss} | {native} | {java} | {bytes} | {preview_moves} |".format(
+            "| {name} | {elapsed} | {preview_plan_ms} | {pss} | {native} | {java} | {bytes} | {preview_moves} |".format(
                 name=name,
                 elapsed=format_delta(record_metric(record, "elapsed_ms"), record_metric(previous, "elapsed_ms")),
+                preview_plan_ms=format_delta(
+                    record_metric(record, "preview_plan_ms"),
+                    record_metric(previous, "preview_plan_ms"),
+                ),
                 pss=format_delta(record_metric(record, "peak_pss_kb"), record_metric(previous, "peak_pss_kb")),
                 native=format_delta(
                     record_metric(record, "peak_native_heap_kb"),
@@ -276,6 +282,7 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
     max_native_heap_kb = env_int("MOBILE_SLICER_PERF_MAX_NATIVE_HEAP_KB", 700_000)
     max_graphics_kb = env_int("MOBILE_SLICER_PERF_MAX_GRAPHICS_KB", 350_000)
     max_private_other_kb = env_int("MOBILE_SLICER_PERF_MAX_PRIVATE_OTHER_KB", 550_000)
+    max_preview_plan_ms = env_int("MOBILE_SLICER_PERF_MAX_PREVIEW_PLAN_MS", 1_500)
     regression_groups = regression_allowances()
     repeat_memory_growth_percent = env_float("MOBILE_SLICER_PERF_REPEAT_MEMORY_GROWTH_PERCENT", 20.0)
     repeat_memory_growth_min_kb = env_int("MOBILE_SLICER_PERF_REPEAT_MEMORY_GROWTH_MIN_KB", 98_304)
@@ -313,6 +320,11 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
                 failures.append(f"{name}: slice {elapsed_ms:.0f}ms exceeds budget {budget}ms")
             if output_bytes is None or output_bytes <= 1024:
                 failures.append(f"{name}: G-code output is unexpectedly small")
+            preview_plan_ms = record_metric(record, "preview_plan_ms")
+            if preview_plan_ms is not None and preview_plan_ms > max_preview_plan_ms:
+                failures.append(
+                    f"{name}: preview planning {preview_plan_ms:.0f}ms exceeds budget {max_preview_plan_ms}ms"
+                )
 
         if peak_pss_kb is not None and peak_pss_kb > max_peak_pss_kb:
             failures.append(f"{name}: peak PSS {peak_pss_kb:.0f}KB exceeds budget {max_peak_pss_kb}KB")

@@ -85,6 +85,43 @@ class AnalyzeMobilePerformanceTest(unittest.TestCase):
 
         self.assertIn("medium-speed-structure: elapsed_ms regressed", "\n".join(failures))
 
+    def test_preview_plan_baseline_regression_fails(self) -> None:
+        current = {
+            "name": "medium-speed-structure",
+            "type": "slice",
+            "elapsed_ms": 10_000,
+            "preview_plan_ms": 2_000,
+            "bytes": 2048,
+        }
+        baseline = {
+            "medium-speed-structure": {
+                "name": "medium-speed-structure",
+                "type": "slice",
+                "elapsed_ms": 10_000,
+                "preview_plan_ms": 500,
+                "bytes": 2048,
+            }
+        }
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            failures = analyzer.analyze([current], baseline)
+
+        self.assertIn("medium-speed-structure: preview_plan_ms regressed", "\n".join(failures))
+
+    def test_preview_plan_hard_budget_fails(self) -> None:
+        current = {
+            "name": "medium-speed-structure",
+            "type": "slice",
+            "elapsed_ms": 10_000,
+            "preview_plan_ms": 1_501,
+            "bytes": 2048,
+        }
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            failures = analyzer.analyze([current], {})
+
+        self.assertIn("medium-speed-structure: preview planning 1501ms exceeds budget 1500ms", failures)
+
 
 if __name__ == "__main__":
     raise SystemExit(unittest.main())
