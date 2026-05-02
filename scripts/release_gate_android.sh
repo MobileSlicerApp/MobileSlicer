@@ -41,6 +41,10 @@ Environment:
   ANDROID_SERIAL                     Default device serial fallback.
   MOBILE_SLICER_PERF_REPEAT_COUNT    Defaults to 2 for this release gate.
   MOBILE_SLICER_PERF_BASELINE        Passed through to verify_android.sh.
+  MOBILE_SLICER_RELEASE_MIN_IDLE_CPU Defaults to 650, measured from top's
+                                     aggregate idle value on an 8-core device.
+  MOBILE_SLICER_RELEASE_IDLE_WAIT_SECONDS
+                                     Defaults to 180.
 USAGE
 }
 
@@ -86,6 +90,8 @@ write_context_files() {
     printf 'git_branch=%s\n' "$(git -C "$ROOT_DIR" branch --show-current)"
     printf 'perf_repeat_count=%s\n' "${MOBILE_SLICER_PERF_REPEAT_COUNT:-2}"
     printf 'perf_baseline=%s\n' "${MOBILE_SLICER_PERF_BASELINE:-default}"
+    printf 'min_idle_cpu=%s\n' "${MOBILE_SLICER_RELEASE_MIN_IDLE_CPU:-650}"
+    printf 'idle_wait_seconds=%s\n' "${MOBILE_SLICER_RELEASE_IDLE_WAIT_SECONDS:-180}"
   } > "$STATUS_PATH"
 }
 
@@ -138,6 +144,39 @@ run_step() {
   fi
 }
 
+sample_device_idle_cpu() {
+  adb -s "$SERIAL" shell top -b -n 1 -o PID,USER,%CPU,%MEM,TIME+,ARGS 2>/dev/null |
+    awk '/%cpu/ { for (i = 1; i <= NF; ++i) if ($i ~ /%idle$/) { sub(/%idle$/, "", $i); print $i; exit } }'
+}
+
+wait_for_device_idle() {
+  local min_idle="${MOBILE_SLICER_RELEASE_MIN_IDLE_CPU:-650}"
+  local max_wait="${MOBILE_SLICER_RELEASE_IDLE_WAIT_SECONDS:-180}"
+  local started_at
+  started_at="$(date +%s)"
+  local consecutive=0
+  while true; do
+    local idle now elapsed
+    idle="$(sample_device_idle_cpu || true)"
+    now="$(date +%s)"
+    elapsed="$((now - started_at))"
+    if [[ "$idle" =~ ^[0-9]+$ && "$idle" -ge "$min_idle" ]]; then
+      consecutive="$((consecutive + 1))"
+      log "Device idle sample ${consecutive}/2: ${idle} >= ${min_idle}"
+      if [[ "$consecutive" -ge 2 ]]; then
+        return 0
+      fi
+    else
+      consecutive=0
+      log "Waiting for device idle before perf: idle=${idle:-unknown}, required>=${min_idle}, elapsed=${elapsed}s"
+    fi
+    if [[ "$elapsed" -ge "$max_wait" ]]; then
+      fail "Device did not reach idle CPU threshold before perf within ${max_wait}s."
+    fi
+    sleep 5
+  done
+}
+
 on_exit() {
   local exit_code="$?"
   finish_context_files "$exit_code"
@@ -159,6 +198,7 @@ log "Writing artifacts to $RUN_DIR"
 run_step "local" "$VERIFY_SCRIPT" local
 run_step "slice-lifecycle" env MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1 "$VERIFY_SCRIPT" slice-lifecycle "$SERIAL"
 run_step "slice-regression" env MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1 "$VERIFY_SCRIPT" slice-regression "$SERIAL"
+run_step "device-idle-preflight" wait_for_device_idle
 run_step "perf-heavy" env \
   MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1 \
   MOBILE_SLICER_PERF_REPEAT_COUNT="${MOBILE_SLICER_PERF_REPEAT_COUNT:-2}" \

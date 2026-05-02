@@ -60,12 +60,15 @@ scripts/release_gate_android.sh RFCYA01ANVE
 ```
 
 The release gate runs `local`, `slice-lifecycle`, `slice-regression`, and
-`perf-heavy` with `MOBILE_SLICER_PERF_REPEAT_COUNT` defaulting to `2`. It writes
-a timestamped report under `artifacts/release-gates/<timestamp>/` with per-step
+`perf-heavy` with `MOBILE_SLICER_PERF_REPEAT_COUNT` defaulting to `2`. Before
+the heavy baseline step, it waits for the device to report enough aggregate idle
+CPU so background Android services do not poison the perf run. It writes a
+timestamped report under `artifacts/release-gates/<timestamp>/` with per-step
 logs, git context, and a `summary.md`; `artifacts/release-gates/latest` points
-at the newest successful run. Set `MOBILE_SLICER_PERF_REPEAT_COUNT` or
-`MOBILE_SLICER_PERF_BASELINE` before invoking the script to override the heavy
-performance repeat count or baseline comparison.
+at the newest successful run. Set `MOBILE_SLICER_PERF_REPEAT_COUNT`,
+`MOBILE_SLICER_PERF_BASELINE`, `MOBILE_SLICER_RELEASE_MIN_IDLE_CPU`, or
+`MOBILE_SLICER_RELEASE_IDLE_WAIT_SECONDS` before invoking the script to override
+the heavy performance repeat count, baseline comparison, or device-idle preflight.
 
 If device automation fails after a slice starts, the script captures context,
 logcat, crash logcat, status text, and G-code head/tail snippets under
