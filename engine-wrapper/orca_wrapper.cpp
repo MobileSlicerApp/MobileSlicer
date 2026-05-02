@@ -4458,6 +4458,25 @@ static bool ensure_gcode_preview_cache(OrcaEngine* engine, std::string& error, P
     return engine->impl.cached_preview_complete;
 }
 
+static bool cached_preview_covers_layer_range(const OrcaEngineImpl& impl, long min_layer, long max_layer)
+{
+    if (!impl.cached_preview_valid || min_layer < 0 || max_layer < min_layer) {
+        return false;
+    }
+    if (impl.cached_preview_input.layer_vertex_ranges.empty()) {
+        return false;
+    }
+    const long cached_layers = static_cast<long>(impl.cached_preview_input.layer_vertex_ranges.size());
+    if (max_layer >= cached_layers) {
+        return false;
+    }
+    if (impl.cached_preview_complete) {
+        return true;
+    }
+    // An incomplete prefix cache may stop inside its last indexed layer.
+    return max_layer + 1 < cached_layers;
+}
+
 extern "C" OrcaGcodeViewer* orca_gcode_viewer_create(void)
 {
     try {
@@ -4590,7 +4609,9 @@ extern "C" int orca_gcode_viewer_load_latest_slice(OrcaGcodeViewer* viewer, Orca
         bool loaded_directly_from_cache = false;
         long selected_parse_ms = 0;
         long libvgcode_load_ms = 0;
-        if (cache_available) {
+        const bool cache_covers_selected_range =
+            cache_available || cached_preview_covers_layer_range(engine->impl, min_layer, max_layer);
+        if (cache_covers_selected_range) {
             const auto range_load_start = std::chrono::steady_clock::now();
             preview_vertices = viewer->viewer.load_layer_range(
                 engine->impl.cached_preview_input,
@@ -4622,7 +4643,7 @@ extern "C" int orca_gcode_viewer_load_latest_slice(OrcaGcodeViewer* viewer, Orca
             "range=" + std::to_string(min_layer) + "-" + std::to_string(max_layer) +
             " vertices=" + std::to_string(preview_vertices) +
             " budget=" + std::to_string(vertex_budget) +
-            " cache=" + std::string(cache_available ? (loaded_directly_from_cache ? "range" : "fallback") : "miss") +
+            " cache=" + std::string(cache_covers_selected_range ? (loaded_directly_from_cache ? "range" : "fallback") : "miss") +
             " cachedVertices=" + std::to_string(cache_status.cached_vertices) +
             " cachedLayers=" + std::to_string(cache_status.cached_layers));
         if (preview_vertices >= vertex_budget) {
@@ -4644,7 +4665,7 @@ extern "C" int orca_gcode_viewer_load_latest_slice(OrcaGcodeViewer* viewer, Orca
                 " requestedMaxLayer=" + std::to_string(max_layer) +
                 " loadedMinLayer=" + std::to_string(min_layer) +
                 " loadedMaxLayer=" + std::to_string(max_layer) +
-                " cache=" + std::string(cache_available ? (loaded_directly_from_cache ? "range" : "fallback") : "miss") +
+                " cache=" + std::string(cache_covers_selected_range ? (loaded_directly_from_cache ? "range" : "fallback") : "miss") +
                 " cacheValid=" + std::string(cache_status.cache_valid ? "true" : "false") +
                 " cacheComplete=" + std::string(cache_status.cache_complete ? "true" : "false") +
                 " cacheBuilt=" + std::string(cache_status.cache_built ? "true" : "false") +
