@@ -41,7 +41,10 @@ class AutomationSliceRunnerTest {
                 processorMoveBytes = 11,
                 processorLineEndBytes = 12,
                 previewLayerCountBytes = 13,
-                exactPreviewCacheEligible = true
+                exactPreviewCacheEligible = true,
+                processorMoveBytesRetained = 0,
+                processorLineEndBytesRetained = 0,
+                processorReleaseMs = 14
             ),
             previewInfoMetrics = AutomationSlicePreviewInfoMetrics(
                 summaryHasRichPreviewInfo = true,
@@ -80,6 +83,9 @@ class AutomationSliceRunnerTest {
         assertTrue(status.contains("processorLineEndBytes=12"))
         assertTrue(status.contains("previewLayerCountBytes=13"))
         assertTrue(status.contains("exactPreviewCacheEligible=1"))
+        assertTrue(status.contains("processorMoveBytesRetained=0"))
+        assertTrue(status.contains("processorLineEndBytesRetained=0"))
+        assertTrue(status.contains("processorReleaseMs=14"))
         assertTrue(status.contains("previewInfoRich=1"))
         assertTrue(status.contains("previewInfoEnrichedRich=1"))
         assertTrue(status.contains("previewInfoLineTypes=2"))
@@ -101,7 +107,8 @@ class AutomationSliceRunnerTest {
     fun parsesNativeSliceMetrics() {
         val metrics = parseAutomationSliceNativeMetrics(
             "previewMoves=123|previewCacheBuilt=1|previewCacheComplete=0|previewCachedVertices=456|previewCacheBuildMs=7" +
-                "|gcodeBytes=89|processorMoveBytes=100|processorLineEndBytes=11|previewLayerCountBytes=12|exactPreviewCacheEligible=1"
+                "|gcodeBytes=89|processorMoveBytes=100|processorLineEndBytes=11|previewLayerCountBytes=12|exactPreviewCacheEligible=1" +
+                "|processorMoveBytesRetained=0|processorLineEndBytesRetained=0|processorReleaseMs=3"
         )
 
         assertEquals(123L, metrics.previewMoves)
@@ -114,6 +121,9 @@ class AutomationSliceRunnerTest {
         assertEquals(11L, metrics.processorLineEndBytes)
         assertEquals(12L, metrics.previewLayerCountBytes)
         assertTrue(metrics.exactPreviewCacheEligible)
+        assertEquals(0L, metrics.processorMoveBytesRetained)
+        assertEquals(0L, metrics.processorLineEndBytesRetained)
+        assertEquals(3L, metrics.processorReleaseMs)
     }
 
     @Test

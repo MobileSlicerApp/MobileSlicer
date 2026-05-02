@@ -93,7 +93,10 @@ internal data class AutomationSliceNativeMetrics(
     val processorMoveBytes: Long = 0L,
     val processorLineEndBytes: Long = 0L,
     val previewLayerCountBytes: Long = 0L,
-    val exactPreviewCacheEligible: Boolean = false
+    val exactPreviewCacheEligible: Boolean = false,
+    val processorMoveBytesRetained: Long = 0L,
+    val processorLineEndBytesRetained: Long = 0L,
+    val processorReleaseMs: Long = 0L
 )
 
 internal data class AutomationSlicePreviewInfoMetrics(
@@ -146,6 +149,9 @@ internal fun automationSliceSuccessStatus(
         "processorLineEndBytes=${nativeMetrics.processorLineEndBytes} " +
         "previewLayerCountBytes=${nativeMetrics.previewLayerCountBytes} " +
         "exactPreviewCacheEligible=${if (nativeMetrics.exactPreviewCacheEligible) 1 else 0} " +
+        "processorMoveBytesRetained=${nativeMetrics.processorMoveBytesRetained} " +
+        "processorLineEndBytesRetained=${nativeMetrics.processorLineEndBytesRetained} " +
+        "processorReleaseMs=${nativeMetrics.processorReleaseMs} " +
         "previewInfoRich=${if (previewInfoMetrics.summaryHasRichPreviewInfo) 1 else 0} " +
         "previewInfoEnrichedRich=${if (previewInfoMetrics.enrichedHasRichPreviewInfo) 1 else 0} " +
         "previewInfoLineTypes=${previewInfoMetrics.lineTypeCount} " +
@@ -184,7 +190,10 @@ internal fun parseAutomationSliceNativeMetrics(metricsText: String?): Automation
         processorMoveBytes = fields["processorMoveBytes"]?.toLongOrNull() ?: 0L,
         processorLineEndBytes = fields["processorLineEndBytes"]?.toLongOrNull() ?: 0L,
         previewLayerCountBytes = fields["previewLayerCountBytes"]?.toLongOrNull() ?: 0L,
-        exactPreviewCacheEligible = fields["exactPreviewCacheEligible"] == "1"
+        exactPreviewCacheEligible = fields["exactPreviewCacheEligible"] == "1",
+        processorMoveBytesRetained = fields["processorMoveBytesRetained"]?.toLongOrNull() ?: 0L,
+        processorLineEndBytesRetained = fields["processorLineEndBytesRetained"]?.toLongOrNull() ?: 0L,
+        processorReleaseMs = fields["processorReleaseMs"]?.toLongOrNull() ?: 0L
     )
 }
 

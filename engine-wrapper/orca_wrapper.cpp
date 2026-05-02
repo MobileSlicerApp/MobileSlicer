@@ -121,6 +121,31 @@ struct PreviewCacheStatus {
     long parse_ms{0};
 };
 
+struct GcodeProcessorBufferReleaseStats {
+    size_t move_bytes_before{0};
+    size_t line_end_bytes_before{0};
+    size_t move_bytes_retained{0};
+    size_t line_end_bytes_retained{0};
+    long release_ms{0};
+};
+
+static GcodeProcessorBufferReleaseStats release_gcode_processor_buffers(
+    Slic3r::GCodeProcessorResult& result)
+{
+    const auto release_start = std::chrono::steady_clock::now();
+    GcodeProcessorBufferReleaseStats stats;
+    stats.move_bytes_before = result.moves.size() * sizeof(Slic3r::GCodeProcessorResult::MoveVertex);
+    stats.line_end_bytes_before = result.lines_ends.size() * sizeof(size_t);
+
+    std::vector<Slic3r::GCodeProcessorResult::MoveVertex>().swap(result.moves);
+    std::vector<size_t>().swap(result.lines_ends);
+
+    stats.move_bytes_retained = result.moves.capacity() * sizeof(Slic3r::GCodeProcessorResult::MoveVertex);
+    stats.line_end_bytes_retained = result.lines_ends.capacity() * sizeof(size_t);
+    stats.release_ms = elapsed_ms_since(release_start);
+    return stats;
+}
+
 static void log_print_region_extruders(const char* label, const Slic3r::Print& print)
 {
     std::ostringstream message;
@@ -4028,6 +4053,7 @@ extern "C" int orca_slice(OrcaEngine* engine)
         engine->impl.gcode_summary = summarize_gcode_file_for_android(gcode_path);
         engine->impl.gcode_summary = enrich_gcode_summary_from_processor(engine->impl.gcode_summary, gcode_result, &print);
         engine->impl.gcode_summary_enriched = true;
+        std::string slice_metrics;
 #if defined(MOBILE_SLICER_ENABLE_VGCODE)
         engine->impl.cached_preview_input = libvgcode::GCodeInputData{};
         engine->impl.cached_preview_source_size = 0;
@@ -4073,7 +4099,7 @@ extern "C" int orca_slice(OrcaEngine* engine)
                 "skipped moves=" + std::to_string(gcode_result.moves.size()) +
                     " reason=too_large_for_exact_cache");
         }
-        engine->impl.slice_metrics =
+        slice_metrics =
             "previewMoves=" + std::to_string(preview_moves) +
             "|previewCacheBuilt=" + std::string(engine->impl.cached_preview_valid ? "1" : "0") +
             "|previewCacheComplete=" + std::string(engine->impl.cached_preview_complete ? "1" : "0") +
@@ -4085,7 +4111,7 @@ extern "C" int orca_slice(OrcaEngine* engine)
             "|previewLayerCountBytes=" + std::to_string(engine->impl.cached_preview_layer_counts.size() * sizeof(size_t)) +
             "|exactPreviewCacheEligible=" + std::string(exact_preview_cache_eligible ? "1" : "0");
 #else
-        engine->impl.slice_metrics =
+        slice_metrics =
             "previewMoves=0|previewCacheBuilt=0|previewCacheComplete=0|previewCachedVertices=0|previewCacheBuildMs=0"
             "|gcodeBytes=" + std::to_string(gcode_size) +
             "|processorMoveBytes=0|processorLineEndBytes=0|previewLayerCountBytes=0|exactPreviewCacheEligible=0";
@@ -4118,6 +4144,21 @@ extern "C" int orca_slice(OrcaEngine* engine)
                     "summary_time_source=gcode_footer processorSeconds=" + std::to_string(static_cast<long>(std::lround(normal_print_time))));
             }
         }
+#if defined(MOBILE_SLICER_ENABLE_VGCODE)
+        const GcodeProcessorBufferReleaseStats processor_release_stats =
+            release_gcode_processor_buffers(gcode_result);
+        engine->impl.slice_metrics =
+            slice_metrics +
+            "|processorMoveBytesRetained=" + std::to_string(processor_release_stats.move_bytes_retained) +
+            "|processorLineEndBytesRetained=" + std::to_string(processor_release_stats.line_end_bytes_retained) +
+            "|processorReleaseMs=" + std::to_string(processor_release_stats.release_ms);
+#else
+        std::vector<Slic3r::GCodeProcessorResult::MoveVertex>().swap(gcode_result.moves);
+        std::vector<size_t>().swap(gcode_result.lines_ends);
+        engine->impl.slice_metrics =
+            slice_metrics +
+            "|processorMoveBytesRetained=0|processorLineEndBytesRetained=0|processorReleaseMs=0";
+#endif
         if (kVerboseNativeTimingLogs) {
             std::ostringstream message;
             message
@@ -4131,9 +4172,6 @@ extern "C" int orca_slice(OrcaEngine* engine)
             log_native_info("orca_slice", message.str());
         }
         log_stage_elapsed("summarize_gcode");
-
-        std::vector<Slic3r::GCodeProcessorResult::MoveVertex>().swap(gcode_result.moves);
-        std::vector<size_t>().swap(gcode_result.lines_ends);
 
         return ORCA_SUCCESS;
     } catch (const Slic3r::SlicingErrors& errors) {
