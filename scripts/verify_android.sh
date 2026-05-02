@@ -276,6 +276,7 @@ run_script_tests() {
   bash -n "$ROOT_DIR/scripts/verify_android.sh"
   python3 -m py_compile "$ROOT_DIR"/scripts/*.py
   (cd "$ROOT_DIR" && python3 scripts/test_analyze_mobile_performance.py)
+  (cd "$ROOT_DIR" && python3 scripts/test_gcode_preview_layer_counter.py)
 }
 
 run_asset_generator_tests() {
