@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import sys
 from typing import Any
 
@@ -81,6 +82,13 @@ def percent_change(current: float, previous: float) -> float:
     if previous == 0:
         return 0.0 if current == 0 else float("inf")
     return ((current - previous) / previous) * 100.0
+
+
+REPEAT_SUFFIX_RE = re.compile(r"-r[0-9]+$")
+
+
+def base_record_name(name: str) -> str:
+    return REPEAT_SUFFIX_RE.sub("", name)
 
 
 def build_markdown(records: list[dict[str, Any]], failures: list[str]) -> str:
@@ -166,9 +174,13 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
     slice_regression_percent = env_float("MOBILE_SLICER_PERF_SLICE_REGRESSION_PERCENT", 25.0)
     memory_regression_percent = env_float("MOBILE_SLICER_PERF_MEMORY_REGRESSION_PERCENT", 25.0)
     output_regression_percent = env_float("MOBILE_SLICER_PERF_OUTPUT_REGRESSION_PERCENT", 35.0)
+    repeat_memory_growth_percent = env_float("MOBILE_SLICER_PERF_REPEAT_MEMORY_GROWTH_PERCENT", 20.0)
+    repeat_memory_growth_min_kb = env_int("MOBILE_SLICER_PERF_REPEAT_MEMORY_GROWTH_MIN_KB", 32_768)
+    repeated_slices: dict[str, list[dict[str, Any]]] = {}
 
     for record in records:
         name = str(record.get("name", "unnamed"))
+        base_name = base_record_name(name)
         record_type = record.get("type")
         startup_ms = record_metric(record, "startup_ms")
         elapsed_ms = record_metric(record, "elapsed_ms")
@@ -186,9 +198,11 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
                 failures.append(f"{name}: startup {startup_ms:.0f}ms exceeds budget {max_startup_ms}ms")
 
         if record_type == "slice":
+            if base_name != name:
+                repeated_slices.setdefault(base_name, []).append(record)
             budget = env_int(
-                f"MOBILE_SLICER_PERF_MAX_{name.upper().replace('-', '_')}_SLICE_MS",
-                DEFAULT_SLICE_BUDGETS_MS.get(name, 180_000),
+                f"MOBILE_SLICER_PERF_MAX_{base_name.upper().replace('-', '_')}_SLICE_MS",
+                DEFAULT_SLICE_BUDGETS_MS.get(base_name, 180_000),
             )
             if elapsed_ms is None:
                 failures.append(f"{name}: missing elapsed_ms")
@@ -210,7 +224,7 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
                 f"{name}: private other memory {peak_private_other_kb:.0f}KB exceeds budget {max_private_other_kb}KB"
             )
 
-        previous = baseline.get(name)
+        previous = baseline.get(name) or baseline.get(base_name)
         if not previous:
             continue
         comparisons = [
@@ -236,6 +250,31 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
                 failures.append(
                     f"{name}: {metric} regressed by {change:.1f}% "
                     f"({previous_value:.0f} -> {current_value:.0f}, allowed {allowed_percent:.1f}%)"
+                )
+
+    for base_name, repeat_records in sorted(repeated_slices.items()):
+        if len(repeat_records) < 2:
+            continue
+        first = repeat_records[0]
+        last = repeat_records[-1]
+        for metric in [
+            "peak_pss_kb",
+            "peak_java_heap_kb",
+            "peak_native_heap_kb",
+            "peak_graphics_kb",
+            "peak_private_other_kb",
+        ]:
+            first_value = record_metric(first, metric)
+            last_value = record_metric(last, metric)
+            if first_value is None or last_value is None:
+                continue
+            delta_kb = last_value - first_value
+            growth = percent_change(last_value, first_value)
+            if growth > repeat_memory_growth_percent and delta_kb > repeat_memory_growth_min_kb:
+                failures.append(
+                    f"{base_name}: {metric} grew by {growth:.1f}% across repeated runs "
+                    f"({first_value:.0f} -> {last_value:.0f}, allowed {repeat_memory_growth_percent:.1f}% "
+                    f"and {repeat_memory_growth_min_kb}KB)"
                 )
 
     return failures

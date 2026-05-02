@@ -97,7 +97,9 @@ Modes:
           MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
   perf-heavy
           Run the same measurement stack on only the medium, complex, and stress
-          fixtures. Intended for memory-pressure optimization checks.
+          fixtures. Intended for memory-pressure optimization checks. Set
+          MOBILE_SLICER_PERF_REPEAT_COUNT to repeat each slice and check
+          cross-run memory growth.
   benchy  Build, install, stage an STL app-private, and run automation slicing.
           Requires MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1.
   all     Run local checks and install the debug APK.
@@ -832,6 +834,17 @@ run_perf_slice_case() {
     "$AUTOMATION_LAST_OUTPUT_PATH"
 }
 
+perf_case_name() {
+  local base_name="$1"
+  local repeat_index="$2"
+  local repeat_count="$3"
+  if [[ "$repeat_count" -le 1 ]]; then
+    printf '%s\n' "$base_name"
+  else
+    printf '%s-r%s\n' "$base_name" "$repeat_index"
+  fi
+}
+
 run_performance_gate() {
   local serial="$1"
   local heavy_only="${2:-0}"
@@ -842,6 +855,10 @@ run_performance_gate() {
   require_automation_fixture "$MEDIUM_SLICE_PERF_STL" "medium performance STL"
   require_automation_fixture "$COMPLEX_SLICE_PERF_STL" "complex performance STL"
   require_automation_fixture "$STRESS_SLICE_PERF_STL" "stress performance STL"
+  local repeat_count="${MOBILE_SLICER_PERF_REPEAT_COUNT:-1}"
+  [[ "$repeat_count" =~ ^[0-9]+$ ]] || fail "MOBILE_SLICER_PERF_REPEAT_COUNT must be a positive integer."
+  repeat_count="$((10#$repeat_count))"
+  [[ "$repeat_count" -ge 1 ]] || fail "MOBILE_SLICER_PERF_REPEAT_COUNT must be at least 1."
   install_perf_apk "$serial"
 
   local artifact_root="$ROOT_DIR/artifacts/performance"
@@ -882,18 +899,23 @@ run_performance_gate() {
   complex_config="$(automation_config_with_overrides brim_width=0 wall_loops=2 sparse_infill_density=15 enable_support=false)"
   stress_config="$(automation_config_with_overrides brim_width=0 wall_loops=2 sparse_infill_density=10 enable_support=false)"
 
-  if [[ "$heavy_only" != "1" ]]; then
-    run_perf_slice_case "$records_path" "$serial" "small-cube" "$DEFAULT_SLICE_SMOKE_STL" "$default_config"
-    run_perf_slice_case "$records_path" "$serial" "bridge-support" "$SUPPORT_SLICE_SMOKE_STL" "$support_config"
-    run_perf_slice_case "$records_path" "$serial" "perimeter-array" "$PERIMETER_ARRAY_SLICE_SMOKE_STL" "$perimeter_config"
+  if [[ "$repeat_count" -gt 1 ]]; then
+    log "Repeating performance slice cases $repeat_count times for memory-growth checks"
   fi
-  run_perf_slice_case "$records_path" "$serial" "medium-speed-structure" "$MEDIUM_SLICE_PERF_STL" "$medium_config"
-  run_perf_slice_case "$records_path" "$serial" "complex-vfa" "$COMPLEX_SLICE_PERF_STL" "$complex_config"
-  if [[ "$heavy_only" == "1" || "${MOBILE_SLICER_PERF_INCLUDE_STRESS:-0}" =~ ^(1|true|TRUE|yes|YES)$ ]]; then
-    run_perf_slice_case "$records_path" "$serial" "stress-temperature-tower" "$STRESS_SLICE_PERF_STL" "$stress_config"
-  else
-    log "Skipping stress-temperature-tower; set MOBILE_SLICER_PERF_INCLUDE_STRESS=1 to include the 10MB stress fixture."
-  fi
+  for repeat_index in $(seq 1 "$repeat_count"); do
+    if [[ "$heavy_only" != "1" ]]; then
+      run_perf_slice_case "$records_path" "$serial" "$(perf_case_name "small-cube" "$repeat_index" "$repeat_count")" "$DEFAULT_SLICE_SMOKE_STL" "$default_config"
+      run_perf_slice_case "$records_path" "$serial" "$(perf_case_name "bridge-support" "$repeat_index" "$repeat_count")" "$SUPPORT_SLICE_SMOKE_STL" "$support_config"
+      run_perf_slice_case "$records_path" "$serial" "$(perf_case_name "perimeter-array" "$repeat_index" "$repeat_count")" "$PERIMETER_ARRAY_SLICE_SMOKE_STL" "$perimeter_config"
+    fi
+    run_perf_slice_case "$records_path" "$serial" "$(perf_case_name "medium-speed-structure" "$repeat_index" "$repeat_count")" "$MEDIUM_SLICE_PERF_STL" "$medium_config"
+    run_perf_slice_case "$records_path" "$serial" "$(perf_case_name "complex-vfa" "$repeat_index" "$repeat_count")" "$COMPLEX_SLICE_PERF_STL" "$complex_config"
+    if [[ "$heavy_only" == "1" || "${MOBILE_SLICER_PERF_INCLUDE_STRESS:-0}" =~ ^(1|true|TRUE|yes|YES)$ ]]; then
+      run_perf_slice_case "$records_path" "$serial" "$(perf_case_name "stress-temperature-tower" "$repeat_index" "$repeat_count")" "$STRESS_SLICE_PERF_STL" "$stress_config"
+    elif [[ "$repeat_index" == "1" ]]; then
+      log "Skipping stress-temperature-tower; set MOBILE_SLICER_PERF_INCLUDE_STRESS=1 to include the 10MB stress fixture."
+    fi
+  done
 
   local baseline_args=()
   if [[ -n "${MOBILE_SLICER_PERF_BASELINE:-}" ]]; then

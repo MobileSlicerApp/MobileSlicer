@@ -91,6 +91,23 @@ Java heap, native heap, graphics, private-other, and system memory. Use
 `perf-heavy` while optimizing memory pressure; it runs only the medium, complex,
 and stress fixtures.
 
+For optimization work that might leak or retain native/Java memory across
+slices, repeat the heavy gate:
+
+```bash
+MOBILE_SLICER_ALLOW_DEVICE_AUTOMATION=1 \
+MOBILE_SLICER_PERF_REPEAT_COUNT=2 \
+scripts/verify_android.sh perf-heavy RFCYA01ANVE
+```
+
+Repeated records are named with `-r1`, `-r2`, and so on. The analyzer applies
+the normal slice budgets to the base fixture name and also fails if peak memory
+grows too much between the first and last repeat. Override the default 20%
+growth allowance with `MOBILE_SLICER_PERF_REPEAT_MEMORY_GROWTH_PERCENT`.
+The growth gate also requires more than `32768KB` of absolute growth by default
+so small allocator or graphics warmup deltas do not fail optimization runs; tune
+that floor with `MOBILE_SLICER_PERF_REPEAT_MEMORY_GROWTH_MIN_KB`.
+
 To compare against a previous run, pass the prior `report.json`:
 
 ```bash
