@@ -77,6 +77,21 @@ def first_present_int(primary: dict[str, Any], events: list[dict[str, int]], sta
     return status_value if status_value is not None else max_metric(events, event_key)
 
 
+def add_max_budget_failure(
+    failures: list[str],
+    value: int | None,
+    budget: int,
+    label: str,
+    missing_message: str | None = None,
+) -> None:
+    if value is None:
+        if missing_message is not None:
+            failures.append(missing_message)
+        return
+    if value > budget:
+        failures.append(f"{label} {value}ms exceeds budget {budget}ms")
+
+
 def analyze(status: dict[str, Any], events: list[dict[str, int]], profile: str) -> tuple[dict[str, Any], list[str]]:
     max_native_load_ms = first_present_int(status, events, "maxNativeLoadMs", "nativeLoadMs")
     max_first_frame_ms = first_present_int(status, events, "maxFirstFrameMs", "firstFrameMs")
@@ -125,6 +140,9 @@ def analyze(status: dict[str, Any], events: list[dict[str, int]], profile: str) 
 
     failures: list[str] = []
     max_native_budget = env_int("MOBILE_SLICER_PREVIEW_MAX_NATIVE_LOAD_MS", 2_500)
+    max_native_selected_parse_budget = env_int("MOBILE_SLICER_PREVIEW_MAX_NATIVE_SELECTED_PARSE_MS", 900)
+    max_native_libvgcode_load_budget = env_int("MOBILE_SLICER_PREVIEW_MAX_NATIVE_LIBVGCODE_LOAD_MS", 300)
+    max_native_total_load_budget = env_int("MOBILE_SLICER_PREVIEW_MAX_NATIVE_TOTAL_LOAD_MS", 1_200)
     max_first_frame_budget = env_int("MOBILE_SLICER_PREVIEW_MAX_FIRST_FRAME_MS", 3_000)
     max_frame_budget = env_int("MOBILE_SLICER_PREVIEW_MAX_FRAME_MS", 64)
     max_slow_frames_budget = env_int("MOBILE_SLICER_PREVIEW_MAX_SLOW_FRAMES", 0)
@@ -145,6 +163,27 @@ def analyze(status: dict[str, Any], events: list[dict[str, int]], profile: str) 
         failures.append("missing native preview load timing")
     elif max_native_load_ms > max_native_budget:
         failures.append(f"native preview load {max_native_load_ms}ms exceeds budget {max_native_budget}ms")
+    add_max_budget_failure(
+        failures,
+        max_native_selected_parse_ms,
+        max_native_selected_parse_budget,
+        "native selected preview parse",
+        "missing native selected preview parse timing" if events else None,
+    )
+    add_max_budget_failure(
+        failures,
+        max_native_libvgcode_load_ms,
+        max_native_libvgcode_load_budget,
+        "native libvgcode preview load",
+        "missing native libvgcode preview load timing" if events else None,
+    )
+    add_max_budget_failure(
+        failures,
+        max_native_total_load_ms,
+        max_native_total_load_budget,
+        "native total preview load",
+        "missing native total preview load timing" if events else None,
+    )
     if max_first_frame_ms is None:
         failures.append("missing first preview frame timing")
     elif max_first_frame_ms > max_first_frame_budget:
@@ -160,6 +199,9 @@ def analyze(status: dict[str, Any], events: list[dict[str, int]], profile: str) 
 
     summary["budgets"] = {
         "max_native_load_ms": max_native_budget,
+        "max_native_selected_parse_ms": max_native_selected_parse_budget,
+        "max_native_libvgcode_load_ms": max_native_libvgcode_load_budget,
+        "max_native_total_load_ms": max_native_total_load_budget,
         "max_first_frame_ms": max_first_frame_budget,
         "max_frame_ms": max_frame_budget,
         "max_slow_frames": max_slow_frames_budget,
@@ -210,6 +252,9 @@ def build_markdown(summary: dict[str, Any]) -> str:
     lines.extend(
         [
             f"- Native preview load max: `{budgets['max_native_load_ms']}` ms",
+            f"- Native selected parse max: `{budgets['max_native_selected_parse_ms']}` ms",
+            f"- Native libvgcode load max: `{budgets['max_native_libvgcode_load_ms']}` ms",
+            f"- Native total load max: `{budgets['max_native_total_load_ms']}` ms",
             f"- First frame max: `{budgets['max_first_frame_ms']}` ms",
             f"- Frame max: `{budgets['max_frame_ms']}` ms",
             f"- Slow frames max: `{budgets['max_slow_frames']}`",

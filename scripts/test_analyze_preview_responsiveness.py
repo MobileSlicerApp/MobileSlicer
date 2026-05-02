@@ -40,9 +40,9 @@ class AnalyzePreviewResponsivenessTest(unittest.TestCase):
             timing_path = pathlib.Path(directory) / "timing-logcat.txt"
             timing_path.write_text(
                 """
-                05-02 10:00:00 I MobileSlicerPerf: workspace_preview_runtime previewKey=7 layerStart=0 layerEnd=20 vertexBudget=2000000 nativeLoadMs=349 firstFrameMs=701 lastFrameMs=16 slowFrames=0 frames=1
+                05-02 10:00:00 I MobileSlicerPerf: workspace_preview_runtime previewKey=7 layerStart=0 layerEnd=20 vertexBudget=2000000 nativeLoadMs=349 nativeSelectedParseMs=120 nativeLibvgcodeLoadMs=40 nativeTotalLoadMs=180 firstFrameMs=701 lastFrameMs=16 slowFrames=0 frames=1
                 ignored line
-                05-02 10:00:01 I MobileSlicerPerf: workspace_preview_runtime previewKey=7 layerStart=0 layerEnd=20 vertexBudget=2000000 nativeLoadMs=349 firstFrameMs=701 lastFrameMs=18 slowFrames=0 frames=40
+                05-02 10:00:01 I MobileSlicerPerf: workspace_preview_runtime previewKey=7 layerStart=0 layerEnd=20 vertexBudget=2000000 nativeLoadMs=349 nativeSelectedParseMs=130 nativeLibvgcodeLoadMs=45 nativeTotalLoadMs=190 firstFrameMs=701 lastFrameMs=18 slowFrames=0 frames=40
                 """,
                 encoding="utf-8",
             )
@@ -51,6 +51,7 @@ class AnalyzePreviewResponsivenessTest(unittest.TestCase):
 
         self.assertEqual(2, len(events))
         self.assertEqual(349, events[0]["nativeLoadMs"])
+        self.assertEqual(120, events[0]["nativeSelectedParseMs"])
         self.assertEqual(40, events[1]["frames"])
 
     def test_analyze_passes_with_status_metrics(self) -> None:
@@ -108,6 +109,65 @@ class AnalyzePreviewResponsivenessTest(unittest.TestCase):
             _, failures = analyzer.analyze(status, [], "preview-churn")
 
         self.assertIn("newest churn preview request did not render", failures)
+
+    def test_analyze_fails_when_preview_load_breakdown_exceeds_budget(self) -> None:
+        status = {
+            "success": True,
+            "firstReady": 1,
+            "churnRequests": 0,
+            "metrics": 1,
+            "renderedFrames": 1,
+            "maxNativeLoadMs": 400,
+            "maxFirstFrameMs": 750,
+            "maxFrameMs": 16,
+            "slowFrames": 0,
+        }
+        events = [
+            {
+                "nativeLoadMs": 400,
+                "nativeSelectedParseMs": 901,
+                "nativeLibvgcodeLoadMs": 301,
+                "nativeTotalLoadMs": 1201,
+                "firstFrameMs": 750,
+                "lastFrameMs": 16,
+                "slowFrames": 0,
+                "frames": 1,
+            }
+        ]
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            _, failures = analyzer.analyze(status, events, "preview-interaction")
+
+        self.assertIn("native selected preview parse 901ms exceeds budget 900ms", failures)
+        self.assertIn("native libvgcode preview load 301ms exceeds budget 300ms", failures)
+        self.assertIn("native total preview load 1201ms exceeds budget 1200ms", failures)
+
+    def test_analyze_fails_when_preview_load_breakdown_missing_from_events(self) -> None:
+        status = {
+            "success": True,
+            "firstReady": 1,
+            "churnRequests": 0,
+            "metrics": 1,
+            "renderedFrames": 1,
+            "maxNativeLoadMs": 400,
+            "maxFirstFrameMs": 750,
+            "maxFrameMs": 16,
+            "slowFrames": 0,
+        }
+        events = [
+            {
+                "nativeLoadMs": 400,
+                "firstFrameMs": 750,
+                "lastFrameMs": 16,
+                "slowFrames": 0,
+                "frames": 1,
+            }
+        ]
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            _, failures = analyzer.analyze(status, events, "preview-interaction")
+
+        self.assertIn("missing native selected preview parse timing", failures)
 
 
 if __name__ == "__main__":
