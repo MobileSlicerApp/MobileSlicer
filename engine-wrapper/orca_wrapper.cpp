@@ -4123,12 +4123,17 @@ extern "C" int orca_slice(OrcaEngine* engine)
             "|processorLineEndBytes=" + std::to_string(processor_line_end_bytes) +
             "|previewLayerCountBytes=" + std::to_string(engine->impl.cached_preview_layer_counts.size() * sizeof(size_t)) +
             "|exactPreviewCacheEligible=" + std::string(exact_preview_cache_eligible ? "1" : "0") +
-            "|processorMovesReleasedDuringExport=" + std::string(gcode_result.released_move_bytes > 0 ? "1" : "0");
+            "|processorMovesReleasedDuringExport=" + std::string(gcode_result.released_move_bytes > 0 ? "1" : "0") +
+            "|nativeExportStartRssKb=" + std::to_string(gcode_result.mobile_export_start_rss_kb) +
+            "|nativeAfterGenerationRssKb=" + std::to_string(gcode_result.mobile_after_generation_rss_kb) +
+            "|nativeAfterFinalizeRssKb=" + std::to_string(gcode_result.mobile_after_finalize_rss_kb) +
+            "|nativeAfterReleaseRssKb=" + std::to_string(gcode_result.mobile_after_release_rss_kb);
 #else
         slice_metrics =
             "previewMoves=0|previewCacheBuilt=0|previewCacheComplete=0|previewCachedVertices=0|previewCacheBuildMs=0"
             "|gcodeBytes=" + std::to_string(gcode_size) +
-            "|processorMoveBytes=0|processorLineEndBytes=0|previewLayerCountBytes=0|exactPreviewCacheEligible=0|processorMovesReleasedDuringExport=0";
+            "|processorMoveBytes=0|processorLineEndBytes=0|previewLayerCountBytes=0|exactPreviewCacheEligible=0|processorMovesReleasedDuringExport=0"
+            "|nativeExportStartRssKb=0|nativeAfterGenerationRssKb=0|nativeAfterFinalizeRssKb=0|nativeAfterReleaseRssKb=0";
 #endif
         const long summary_parse_ms = elapsed_ms_since(summary_parse_start);
         const float normal_print_time = gcode_result.print_statistics

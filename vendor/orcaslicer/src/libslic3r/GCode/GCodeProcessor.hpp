@@ -256,6 +256,10 @@ class Print;
         size_t released_move_bytes{0};
         size_t released_line_end_count{0};
         size_t released_line_end_bytes{0};
+        size_t mobile_export_start_rss_kb{0};
+        size_t mobile_after_generation_rss_kb{0};
+        size_t mobile_after_finalize_rss_kb{0};
+        size_t mobile_after_release_rss_kb{0};
 
         BedType bed_type = BedType::btCount;
         void reset();
@@ -300,6 +304,10 @@ class Print;
             released_move_bytes = other.released_move_bytes;
             released_line_end_count = other.released_line_end_count;
             released_line_end_bytes = other.released_line_end_bytes;
+            mobile_export_start_rss_kb = other.mobile_export_start_rss_kb;
+            mobile_after_generation_rss_kb = other.mobile_after_generation_rss_kb;
+            mobile_after_finalize_rss_kb = other.mobile_after_finalize_rss_kb;
+            mobile_after_release_rss_kb = other.mobile_after_release_rss_kb;
 #if ENABLE_GCODE_VIEWER_STATISTICS
             time = other.time;
 #endif

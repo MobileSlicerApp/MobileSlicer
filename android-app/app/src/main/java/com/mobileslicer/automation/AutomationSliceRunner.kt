@@ -97,7 +97,11 @@ internal data class AutomationSliceNativeMetrics(
     val processorMovesReleasedDuringExport: Boolean = false,
     val processorMoveBytesRetained: Long = 0L,
     val processorLineEndBytesRetained: Long = 0L,
-    val processorReleaseMs: Long = 0L
+    val processorReleaseMs: Long = 0L,
+    val nativeExportStartRssKb: Long = 0L,
+    val nativeAfterGenerationRssKb: Long = 0L,
+    val nativeAfterFinalizeRssKb: Long = 0L,
+    val nativeAfterReleaseRssKb: Long = 0L
 )
 
 internal data class AutomationSlicePreviewInfoMetrics(
@@ -154,6 +158,10 @@ internal fun automationSliceSuccessStatus(
         "processorMoveBytesRetained=${nativeMetrics.processorMoveBytesRetained} " +
         "processorLineEndBytesRetained=${nativeMetrics.processorLineEndBytesRetained} " +
         "processorReleaseMs=${nativeMetrics.processorReleaseMs} " +
+        "nativeExportStartRssKb=${nativeMetrics.nativeExportStartRssKb} " +
+        "nativeAfterGenerationRssKb=${nativeMetrics.nativeAfterGenerationRssKb} " +
+        "nativeAfterFinalizeRssKb=${nativeMetrics.nativeAfterFinalizeRssKb} " +
+        "nativeAfterReleaseRssKb=${nativeMetrics.nativeAfterReleaseRssKb} " +
         "previewInfoRich=${if (previewInfoMetrics.summaryHasRichPreviewInfo) 1 else 0} " +
         "previewInfoEnrichedRich=${if (previewInfoMetrics.enrichedHasRichPreviewInfo) 1 else 0} " +
         "previewInfoLineTypes=${previewInfoMetrics.lineTypeCount} " +
@@ -196,7 +204,11 @@ internal fun parseAutomationSliceNativeMetrics(metricsText: String?): Automation
         processorMovesReleasedDuringExport = fields["processorMovesReleasedDuringExport"] == "1",
         processorMoveBytesRetained = fields["processorMoveBytesRetained"]?.toLongOrNull() ?: 0L,
         processorLineEndBytesRetained = fields["processorLineEndBytesRetained"]?.toLongOrNull() ?: 0L,
-        processorReleaseMs = fields["processorReleaseMs"]?.toLongOrNull() ?: 0L
+        processorReleaseMs = fields["processorReleaseMs"]?.toLongOrNull() ?: 0L,
+        nativeExportStartRssKb = fields["nativeExportStartRssKb"]?.toLongOrNull() ?: 0L,
+        nativeAfterGenerationRssKb = fields["nativeAfterGenerationRssKb"]?.toLongOrNull() ?: 0L,
+        nativeAfterFinalizeRssKb = fields["nativeAfterFinalizeRssKb"]?.toLongOrNull() ?: 0L,
+        nativeAfterReleaseRssKb = fields["nativeAfterReleaseRssKb"]?.toLongOrNull() ?: 0L
     )
 }
 

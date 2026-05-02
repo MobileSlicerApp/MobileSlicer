@@ -1590,6 +1590,10 @@ void GCodeProcessorResult::reset() {
     released_move_bytes = 0;
     released_line_end_count = 0;
     released_line_end_bytes = 0;
+    mobile_export_start_rss_kb = 0;
+    mobile_after_generation_rss_kb = 0;
+    mobile_after_finalize_rss_kb = 0;
+    mobile_after_release_rss_kb = 0;
     warnings.clear();
 
     //BBS: add mutex for protection of gcode result

@@ -35,6 +35,7 @@
 #include <regex>
 #ifdef __ANDROID__
 #include <android/log.h>
+#include <cstdio>
 #endif
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/find.hpp>
@@ -95,6 +96,22 @@ static const int g_max_flush_count = 4;
 static const size_t g_max_label_object = 64;
 
 #ifdef __ANDROID__
+static size_t mobile_process_rss_kb()
+{
+    FILE* status = std::fopen("/proc/self/status", "r");
+    if (status == nullptr)
+        return 0;
+
+    char line[256];
+    size_t rss_kb = 0;
+    while (std::fgets(line, sizeof(line), status) != nullptr) {
+        if (std::sscanf(line, "VmRSS: %zu kB", &rss_kb) == 1)
+            break;
+    }
+    std::fclose(status);
+    return rss_kb;
+}
+
 static std::string orca_debug_join_u(const std::vector<unsigned int> &values)
 {
     std::string out;
@@ -2109,6 +2126,9 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* resu
     }
     file.close();
     std::cerr << "debug: gcode.do_export file close done\n";
+#ifdef __ANDROID__
+    m_processor.result().mobile_after_generation_rss_kb = mobile_process_rss_kb();
+#endif
 
     check_placeholder_parser_failed();
 
@@ -2176,6 +2196,9 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* resu
 
     m_processor.finalize(true);
     std::cerr << "debug: gcode.do_export finalize done\n";
+#ifdef __ANDROID__
+    m_processor.result().mobile_after_finalize_rss_kb = mobile_process_rss_kb();
+#endif
 //    DoExport::update_print_estimated_times_stats(m_processor, print->m_print_statistics);
     DoExport::update_print_estimated_stats(m_processor, m_writer.extruders(), print->m_print_statistics, print->config());
 #ifdef __ANDROID__
@@ -2185,6 +2208,7 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* resu
         m_processor.result().move_time_summary_valid) {
         m_processor.release_preview_storage();
     }
+    m_processor.result().mobile_after_release_rss_kb = mobile_process_rss_kb();
 #endif
     if (result != nullptr) {
         *result = std::move(m_processor.extract_result());
@@ -2456,6 +2480,9 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
 
     // modifies m_silent_time_estimator_enabled
     DoExport::init_gcode_processor(print.config(), m_processor, m_silent_time_estimator_enabled);
+#ifdef __ANDROID__
+    m_processor.result().mobile_export_start_rss_kb = mobile_process_rss_kb();
+#endif
     std::cerr << "debug: gcode._do_export init_gcode_processor done\n";
     const bool is_bbl_printers = print.is_BBL_printer();
     const WipeTowerType wipe_tower_type = print.wipe_tower_type();
