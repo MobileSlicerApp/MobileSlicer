@@ -122,6 +122,48 @@ class AnalyzeMobilePerformanceTest(unittest.TestCase):
 
         self.assertIn("medium-speed-structure: preview planning 1501ms exceeds budget 1500ms", failures)
 
+    def test_large_preview_requires_processor_storage_release(self) -> None:
+        current = {
+            "name": "medium-speed-structure",
+            "type": "slice",
+            "elapsed_ms": 10_000,
+            "preview_moves": 600_000,
+            "processor_moves_released_during_export": 0,
+            "processor_move_bytes_retained": 1024,
+            "processor_line_end_bytes_retained": 512,
+            "native_after_finalize_rss_kb": 700_000,
+            "native_after_release_rss_kb": 699_000,
+            "bytes": 2048,
+        }
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            failures = analyzer.analyze([current], {})
+
+        joined = "\n".join(failures)
+        self.assertIn("processor preview storage was not released during export", joined)
+        self.assertIn("processor move buffer retained 1024 bytes", joined)
+        self.assertIn("processor line-end buffer retained 512 bytes", joined)
+        self.assertIn("native RSS release drop 1000KB below budget 16384KB", joined)
+
+    def test_large_preview_processor_storage_release_passes(self) -> None:
+        current = {
+            "name": "medium-speed-structure",
+            "type": "slice",
+            "elapsed_ms": 10_000,
+            "preview_moves": 600_000,
+            "processor_moves_released_during_export": 1,
+            "processor_move_bytes_retained": 0,
+            "processor_line_end_bytes_retained": 0,
+            "native_after_finalize_rss_kb": 700_000,
+            "native_after_release_rss_kb": 650_000,
+            "bytes": 2048,
+        }
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            failures = analyzer.analyze([current], {})
+
+        self.assertEqual([], failures)
+
 
 if __name__ == "__main__":
     raise SystemExit(unittest.main())

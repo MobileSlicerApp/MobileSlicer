@@ -283,6 +283,7 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
     max_graphics_kb = env_int("MOBILE_SLICER_PERF_MAX_GRAPHICS_KB", 350_000)
     max_private_other_kb = env_int("MOBILE_SLICER_PERF_MAX_PRIVATE_OTHER_KB", 550_000)
     max_preview_plan_ms = env_int("MOBILE_SLICER_PERF_MAX_PREVIEW_PLAN_MS", 1_500)
+    min_processor_release_drop_kb = env_int("MOBILE_SLICER_PERF_MIN_PROCESSOR_RELEASE_DROP_KB", 16_384)
     regression_groups = regression_allowances()
     repeat_memory_growth_percent = env_float("MOBILE_SLICER_PERF_REPEAT_MEMORY_GROWTH_PERCENT", 20.0)
     repeat_memory_growth_min_kb = env_int("MOBILE_SLICER_PERF_REPEAT_MEMORY_GROWTH_MIN_KB", 98_304)
@@ -325,6 +326,27 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
                 failures.append(
                     f"{name}: preview planning {preview_plan_ms:.0f}ms exceeds budget {max_preview_plan_ms}ms"
                 )
+            preview_moves = record_metric(record, "preview_moves")
+            if preview_moves is not None and preview_moves >= 500_000:
+                processor_released = record_metric(record, "processor_moves_released_during_export")
+                processor_move_retained = record_metric(record, "processor_move_bytes_retained")
+                processor_line_retained = record_metric(record, "processor_line_end_bytes_retained")
+                native_after_finalize = record_metric(record, "native_after_finalize_rss_kb")
+                native_after_release = record_metric(record, "native_after_release_rss_kb")
+                if processor_released != 1:
+                    failures.append(f"{name}: processor preview storage was not released during export")
+                if processor_move_retained not in (None, 0):
+                    failures.append(f"{name}: processor move buffer retained {processor_move_retained:.0f} bytes")
+                if processor_line_retained not in (None, 0):
+                    failures.append(f"{name}: processor line-end buffer retained {processor_line_retained:.0f} bytes")
+                if native_after_finalize is None or native_after_release is None:
+                    failures.append(f"{name}: missing native release RSS metrics")
+                elif native_after_release > native_after_finalize - min_processor_release_drop_kb:
+                    failures.append(
+                        f"{name}: native RSS release drop "
+                        f"{native_after_finalize - native_after_release:.0f}KB below budget "
+                        f"{min_processor_release_drop_kb}KB"
+                    )
 
         if peak_pss_kb is not None and peak_pss_kb > max_peak_pss_kb:
             failures.append(f"{name}: peak PSS {peak_pss_kb:.0f}KB exceeds budget {max_peak_pss_kb}KB")
