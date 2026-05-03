@@ -73,6 +73,10 @@ AUTOMATION_LAST_PEAK_NATIVE_HEAP_KB=""
 AUTOMATION_LAST_PEAK_GRAPHICS_KB=""
 AUTOMATION_LAST_PEAK_PRIVATE_OTHER_KB=""
 AUTOMATION_LAST_PEAK_SYSTEM_KB=""
+AUTOMATION_LAST_CACHE_TOTAL_KB=""
+AUTOMATION_LAST_CACHE_ORCA_TEMP_KB=""
+AUTOMATION_LAST_CACHE_GENERATED_GCODE_KB=""
+AUTOMATION_LAST_CACHE_STAGED_MODEL_KB=""
 PERF_LAST_PEAK_PSS_KB=0
 PERF_LAST_PEAK_JAVA_HEAP_KB=0
 PERF_LAST_PEAK_NATIVE_HEAP_KB=0
@@ -1055,6 +1059,30 @@ device_meminfo() {
   adb_device "$serial" shell dumpsys meminfo "$PACKAGE_NAME" 2>/dev/null
 }
 
+app_cache_usage_kb() {
+  local serial="$1"
+  local selector="$2"
+  local command
+  case "$selector" in
+  total)
+    command='du -k -s cache 2>/dev/null | head -n 1 | cut -f1'
+    ;;
+  orca-temp)
+    command='if [ -e cache/orca-temp ]; then du -k -s cache/orca-temp 2>/dev/null | head -n 1 | cut -f1; else printf 0; fi'
+    ;;
+  generated-gcode)
+    command='total=0; for file in cache/latest-slice-* cache/latest-send-* cache/orca_wrapper_*.gcode; do [ -f "$file" ] || continue; kb=$(du -k "$file" 2>/dev/null | head -n 1 | cut -f1); total=$((total + ${kb:-0})); done; printf "%s" "$total"'
+    ;;
+  staged-model)
+    command='total=0; for file in cache/selected-model-*; do [ -f "$file" ] || continue; kb=$(du -k "$file" 2>/dev/null | head -n 1 | cut -f1); total=$((total + ${kb:-0})); done; printf "%s" "$total"'
+    ;;
+  *)
+    fail "unknown app cache selector: $selector"
+    ;;
+  esac
+  adb_device "$serial" shell "run-as $PACKAGE_NAME sh -c '$command'" 2>/dev/null | tr -d '\r' | tail -n 1
+}
+
 capture_device_command() {
   local serial="$1"
   local output_path="$2"
@@ -1312,6 +1340,10 @@ run_automation_slice() {
   AUTOMATION_LAST_PEAK_GRAPHICS_KB="$PERF_LAST_PEAK_GRAPHICS_KB"
   AUTOMATION_LAST_PEAK_PRIVATE_OTHER_KB="$PERF_LAST_PEAK_PRIVATE_OTHER_KB"
   AUTOMATION_LAST_PEAK_SYSTEM_KB="$PERF_LAST_PEAK_SYSTEM_KB"
+  AUTOMATION_LAST_CACHE_TOTAL_KB="$(app_cache_usage_kb "$serial" total)"
+  AUTOMATION_LAST_CACHE_ORCA_TEMP_KB="$(app_cache_usage_kb "$serial" orca-temp)"
+  AUTOMATION_LAST_CACHE_GENERATED_GCODE_KB="$(app_cache_usage_kb "$serial" generated-gcode)"
+  AUTOMATION_LAST_CACHE_STAGED_MODEL_KB="$(app_cache_usage_kb "$serial" staged-model)"
   clear_current_automation_context
 }
 
@@ -1452,7 +1484,11 @@ append_perf_record() {
   local native_after_release_rss_kb="${36:-}"
   local native_after_stats_rss_kb="${37:-}"
   local native_before_return_rss_kb="${38:-}"
-  python3 - "$records_path" "$name" "$type" "$startup_ms" "$staging_ms" "$native_load_ms" "$placement_ms" "$config_ms" "$native_slice_ms" "$write_gcode_ms" "$elapsed_ms" "$preview_moves" "$preview_cache_built" "$preview_cache_complete" "$preview_cached_vertices" "$preview_cache_build_ms" "$preview_plan_ms" "$preview_load_ms" "$preview_ranges" "$preview_loaded_layers" "$preview_load_success" "$preview_load_gl_unavailable" "$peak_pss_kb" "$peak_java_heap_kb" "$peak_native_heap_kb" "$peak_graphics_kb" "$peak_private_other_kb" "$peak_system_kb" "$bytes" "$fixture_bytes" "$device_output_path" "$processor_moves_released" "$processor_move_bytes_retained" "$processor_line_end_bytes_retained" "$native_after_finalize_rss_kb" "$native_after_release_rss_kb" "$native_after_stats_rss_kb" "$native_before_return_rss_kb" <<'PY'
+  local cache_total_kb="${39:-}"
+  local cache_orca_temp_kb="${40:-}"
+  local cache_generated_gcode_kb="${41:-}"
+  local cache_staged_model_kb="${42:-}"
+  python3 - "$records_path" "$name" "$type" "$startup_ms" "$staging_ms" "$native_load_ms" "$placement_ms" "$config_ms" "$native_slice_ms" "$write_gcode_ms" "$elapsed_ms" "$preview_moves" "$preview_cache_built" "$preview_cache_complete" "$preview_cached_vertices" "$preview_cache_build_ms" "$preview_plan_ms" "$preview_load_ms" "$preview_ranges" "$preview_loaded_layers" "$preview_load_success" "$preview_load_gl_unavailable" "$peak_pss_kb" "$peak_java_heap_kb" "$peak_native_heap_kb" "$peak_graphics_kb" "$peak_private_other_kb" "$peak_system_kb" "$bytes" "$fixture_bytes" "$device_output_path" "$processor_moves_released" "$processor_move_bytes_retained" "$processor_line_end_bytes_retained" "$native_after_finalize_rss_kb" "$native_after_release_rss_kb" "$native_after_stats_rss_kb" "$native_before_return_rss_kb" "$cache_total_kb" "$cache_orca_temp_kb" "$cache_generated_gcode_kb" "$cache_staged_model_kb" <<'PY'
 import json
 import sys
 
@@ -1495,6 +1531,10 @@ import sys
     native_after_release_rss_kb,
     native_after_stats_rss_kb,
     native_before_return_rss_kb,
+    cache_total_kb,
+    cache_orca_temp_kb,
+    cache_generated_gcode_kb,
+    cache_staged_model_kb,
 ) = sys.argv[1:]
 
 def maybe_int(value):
@@ -1539,6 +1579,10 @@ for key, value in [
     ("native_after_release_rss_kb", native_after_release_rss_kb),
     ("native_after_stats_rss_kb", native_after_stats_rss_kb),
     ("native_before_return_rss_kb", native_before_return_rss_kb),
+    ("cache_total_kb", cache_total_kb),
+    ("cache_orca_temp_kb", cache_orca_temp_kb),
+    ("cache_generated_gcode_kb", cache_generated_gcode_kb),
+    ("cache_staged_model_kb", cache_staged_model_kb),
 ]:
     parsed = maybe_int(value)
     if parsed is not None:
@@ -1600,7 +1644,11 @@ run_perf_slice_case() {
     "$AUTOMATION_LAST_NATIVE_AFTER_FINALIZE_RSS_KB" \
     "$AUTOMATION_LAST_NATIVE_AFTER_RELEASE_RSS_KB" \
     "$AUTOMATION_LAST_NATIVE_AFTER_STATS_RSS_KB" \
-    "$AUTOMATION_LAST_NATIVE_BEFORE_RETURN_RSS_KB"
+    "$AUTOMATION_LAST_NATIVE_BEFORE_RETURN_RSS_KB" \
+    "$AUTOMATION_LAST_CACHE_TOTAL_KB" \
+    "$AUTOMATION_LAST_CACHE_ORCA_TEMP_KB" \
+    "$AUTOMATION_LAST_CACHE_GENERATED_GCODE_KB" \
+    "$AUTOMATION_LAST_CACHE_STAGED_MODEL_KB"
 }
 
 perf_case_name() {
@@ -1645,7 +1693,7 @@ run_performance_gate() {
   log "Running non-UI performance gate on $serial"
   capture_perf_device_state "$serial" "$device_state_dir" "before"
   if [[ "$heavy_only" != "1" ]]; then
-    local startup_output startup_ms startup_meminfo startup_pss_kb startup_java_heap_kb startup_native_heap_kb startup_graphics_kb startup_private_other_kb startup_system_kb
+    local startup_output startup_ms startup_meminfo startup_pss_kb startup_java_heap_kb startup_native_heap_kb startup_graphics_kb startup_private_other_kb startup_system_kb startup_cache_total_kb startup_cache_orca_temp_kb startup_cache_generated_gcode_kb startup_cache_staged_model_kb
     startup_output="$(launch_app_for_perf "$serial")"
     printf '%s\n' "$startup_output"
     startup_ms="$(printf '%s\n' "$startup_output" | tail -n 1)"
@@ -1657,6 +1705,10 @@ run_performance_gate() {
     startup_graphics_kb="$(meminfo_app_summary_kb "$startup_meminfo" "Graphics")"
     startup_private_other_kb="$(meminfo_app_summary_kb "$startup_meminfo" "Private Other")"
     startup_system_kb="$(meminfo_app_summary_kb "$startup_meminfo" "System")"
+    startup_cache_total_kb="$(app_cache_usage_kb "$serial" total)"
+    startup_cache_orca_temp_kb="$(app_cache_usage_kb "$serial" orca-temp)"
+    startup_cache_generated_gcode_kb="$(app_cache_usage_kb "$serial" generated-gcode)"
+    startup_cache_staged_model_kb="$(app_cache_usage_kb "$serial" staged-model)"
     printf '%s\n' "$startup_meminfo" > "$PERF_CURRENT_MEMINFO_DIR/cold-start-final-meminfo.txt"
     append_perf_record \
       "$records_path" \
@@ -1689,7 +1741,17 @@ run_performance_gate() {
       "${startup_system_kb:-0}" \
       "" \
       "" \
-      ""
+      "" \
+      "" \
+      "" \
+      "" \
+      "" \
+      "" \
+      "" \
+      "$startup_cache_total_kb" \
+      "$startup_cache_orca_temp_kb" \
+      "$startup_cache_generated_gcode_kb" \
+      "$startup_cache_staged_model_kb"
     assert_no_crash_after_launch "$serial"
   fi
 

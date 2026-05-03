@@ -102,6 +102,8 @@ Default hard budgets are intentionally broad enough for normal phone variance:
 - native heap: `MOBILE_SLICER_PERF_MAX_NATIVE_HEAP_KB`, default `700000`
 - graphics memory: `MOBILE_SLICER_PERF_MAX_GRAPHICS_KB`, default `350000`
 - private-other memory: `MOBILE_SLICER_PERF_MAX_PRIVATE_OTHER_KB`, default `550000`
+- app cache on disk: `MOBILE_SLICER_PERF_MAX_CACHE_TOTAL_KB`, default `786432`
+- Orca native temp cache on disk: `MOBILE_SLICER_PERF_MAX_CACHE_ORCA_TEMP_KB`, default `393216`
 - small cube slice: `MOBILE_SLICER_PERF_MAX_SMALL_CUBE_SLICE_MS`, default `120000`
 - bridge/support slice: `MOBILE_SLICER_PERF_MAX_BRIDGE_SUPPORT_SLICE_MS`, default `180000`
 - perimeter-array slice: `MOBILE_SLICER_PERF_MAX_PERIMETER_ARRAY_SLICE_MS`, default `180000`
@@ -122,16 +124,18 @@ scripts/verify_android.sh perf RFCYA01ANVE
 Slice records include phase timings from the automation path:
 `stagingMs`, `nativeLoadMs`, `placementMs`, `configMs`, `nativeSliceMs`,
 `writeGcodeMs`, and `elapsedMs`. Memory attribution includes peak total PSS,
-Java heap, native heap, graphics, private-other, and system memory. Use
-`perf-heavy` while optimizing memory pressure; it runs only the medium, complex,
-and stress fixtures.
+Java heap, native heap, graphics, private-other, and system memory. Disk cache
+attribution includes total app cache, `orca-temp`, generated G-code cache files,
+and staged model cache files. Use `perf-heavy` while optimizing memory or cache
+pressure; it runs only the medium, complex, and stress fixtures.
 
 `perf-heavy` automatically compares against the checked-in heavy device baseline
 at `performance-baselines/perf-heavy-device-baseline.json` when that file is
 present. Set `MOBILE_SLICER_PERF_BASELINE=none` to run without a baseline, or
 set `MOBILE_SLICER_PERF_BASELINE=/path/to/report.json` to compare against a
 specific run. The report includes a compact baseline comparison for elapsed
-time, PSS, native heap, Java heap, output bytes, and preview metrics.
+time, PSS, native heap, Java heap, app cache, Orca temp cache, output bytes, and
+preview metrics.
 
 For optimization work that might leak or retain native/Java memory across
 slices, repeat the heavy gate:
@@ -160,15 +164,17 @@ scripts/verify_android.sh perf RFCYA01ANVE
 ```
 
 Baseline comparison defaults allow 25% startup, slice-time, and memory regression,
-and 35% emitted-output-size regression. Override with
+25% disk-cache regression, and 35% emitted-output-size regression. Override with
 `MOBILE_SLICER_PERF_STARTUP_REGRESSION_PERCENT`,
 `MOBILE_SLICER_PERF_SLICE_REGRESSION_PERCENT`,
-`MOBILE_SLICER_PERF_MEMORY_REGRESSION_PERCENT`, and
+`MOBILE_SLICER_PERF_MEMORY_REGRESSION_PERCENT`,
+`MOBILE_SLICER_PERF_DISK_REGRESSION_PERCENT`, and
 `MOBILE_SLICER_PERF_OUTPUT_REGRESSION_PERCENT`. Percentage failures also require
 an absolute increase, which keeps small measurement noise from blocking a run:
-`MOBILE_SLICER_PERF_STARTUP_REGRESSION_MIN_MS` defaults to `250`,
-`MOBILE_SLICER_PERF_SLICE_REGRESSION_MIN_MS` defaults to `750`,
-`MOBILE_SLICER_PERF_MEMORY_REGRESSION_MIN_KB` defaults to `98304`, and
+`MOBILE_SLICER_PERF_STARTUP_REGRESSION_MIN_MS` defaults to `250`;
+`MOBILE_SLICER_PERF_SLICE_REGRESSION_MIN_MS` defaults to `750`;
+`MOBILE_SLICER_PERF_MEMORY_REGRESSION_MIN_KB` defaults to `98304`;
+`MOBILE_SLICER_PERF_DISK_REGRESSION_MIN_KB` defaults to `65536`; and
 `MOBILE_SLICER_PERF_OUTPUT_REGRESSION_MIN_UNITS` defaults to `1024`.
 Individual metrics can override that floor with
 `MOBILE_SLICER_PERF_<METRIC>_REGRESSION_MIN`; `peak_pss_kb` defaults to a

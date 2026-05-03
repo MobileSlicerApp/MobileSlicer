@@ -190,6 +190,46 @@ class AnalyzeMobilePerformanceTest(unittest.TestCase):
         self.assertIn("native RSS grew 10000KB after stats update", joined)
         self.assertIn("native RSS grew 10000KB before slice return", joined)
 
+    def test_cache_hard_budgets_fail(self) -> None:
+        current = {
+            "name": "medium-speed-structure",
+            "type": "slice",
+            "elapsed_ms": 10_000,
+            "cache_total_kb": 786_433,
+            "cache_orca_temp_kb": 393_217,
+            "bytes": 2048,
+        }
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            failures = analyzer.analyze([current], {})
+
+        joined = "\n".join(failures)
+        self.assertIn("app cache 786433KB exceeds budget 786432KB", joined)
+        self.assertIn("Orca temp cache 393217KB exceeds budget 393216KB", joined)
+
+    def test_cache_baseline_regression_fails(self) -> None:
+        current = {
+            "name": "medium-speed-structure",
+            "type": "slice",
+            "elapsed_ms": 10_000,
+            "cache_orca_temp_kb": 400_000,
+            "bytes": 2048,
+        }
+        baseline = {
+            "medium-speed-structure": {
+                "name": "medium-speed-structure",
+                "type": "slice",
+                "elapsed_ms": 10_000,
+                "cache_orca_temp_kb": 200_000,
+                "bytes": 2048,
+            }
+        }
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            failures = analyzer.analyze([current], baseline)
+
+        self.assertIn("medium-speed-structure: cache_orca_temp_kb regressed", "\n".join(failures))
+
 
 if __name__ == "__main__":
     raise SystemExit(unittest.main())

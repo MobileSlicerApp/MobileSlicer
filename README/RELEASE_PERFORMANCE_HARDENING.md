@@ -85,6 +85,37 @@ run should have:
 - no crash-buffer entries
 - large-preview processor storage released during export
 - retained processor move and line-end buffers at `0`
+- app cache and Orca temp cache below their disk budgets
+
+## Disk Cache Checkpoints
+
+Performance records include disk cache attribution:
+
+- `cache_total_kb`
+- `cache_orca_temp_kb`
+- `cache_generated_gcode_kb`
+- `cache_staged_model_kb`
+
+The default hard budgets are:
+
+- total app cache: `786432 KB`
+- Orca temp cache: `393216 KB`
+
+Override only when a fixture has proven legitimate temporary disk needs:
+
+```bash
+MOBILE_SLICER_PERF_MAX_CACHE_TOTAL_KB=786432
+MOBILE_SLICER_PERF_MAX_CACHE_ORCA_TEMP_KB=393216
+```
+
+Baseline comparison also treats `cache_total_kb` and `cache_orca_temp_kb` as
+disk regressions. The default allowance is `25%` and at least `65536 KB` of
+absolute growth, configurable with:
+
+```bash
+MOBILE_SLICER_PERF_DISK_REGRESSION_PERCENT=25
+MOBILE_SLICER_PERF_DISK_REGRESSION_MIN_KB=65536
+```
 
 ## Native RSS Checkpoints
 

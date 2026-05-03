@@ -40,6 +40,8 @@ REGRESSION_METRIC_GROUPS = {
     "native_after_release_rss_kb": "memory",
     "native_after_stats_rss_kb": "memory",
     "native_before_return_rss_kb": "memory",
+    "cache_total_kb": "disk",
+    "cache_orca_temp_kb": "disk",
     "bytes": "output",
 }
 
@@ -127,18 +129,20 @@ def build_markdown(records: list[dict[str, Any]], failures: list[str]) -> str:
     lines = [
         "# MobileSlicer Performance Report",
         "",
-        "| Name | Type | Startup ms | Slice ms | Placement ms | Peak PSS KB | Bytes |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+        "| Name | Type | Startup ms | Slice ms | Placement ms | Peak PSS KB | App cache KB | Orca temp KB | Bytes |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for record in records:
         lines.append(
-            "| {name} | {type} | {startup} | {elapsed} | {placement} | {pss} | {bytes} |".format(
+            "| {name} | {type} | {startup} | {elapsed} | {placement} | {pss} | {cache_total} | {cache_orca_temp} | {bytes} |".format(
                 name=record.get("name", ""),
                 type=record.get("type", ""),
                 startup=record.get("startup_ms", ""),
                 elapsed=record.get("elapsed_ms", ""),
                 placement=record.get("placement_ms", ""),
                 pss=record.get("peak_pss_kb", ""),
+                cache_total=record.get("cache_total_kb", ""),
+                cache_orca_temp=record.get("cache_orca_temp_kb", ""),
                 bytes=record.get("bytes", ""),
             )
         )
@@ -172,6 +176,25 @@ def build_markdown(records: list[dict[str, Any]], failures: list[str]) -> str:
                     preview_vertices=record.get("preview_cached_vertices", ""),
                     preview_cache_ms=record.get("preview_cache_build_ms", ""),
                     elapsed=record.get("elapsed_ms", ""),
+                )
+            )
+        lines.extend(
+            [
+                "",
+                "## Disk Cache",
+                "",
+                "| Name | App cache KB | Orca temp KB | Generated G-code KB | Staged model KB |",
+                "| --- | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for record in records:
+            lines.append(
+                "| {name} | {cache_total} | {orca_temp} | {generated_gcode} | {staged_model} |".format(
+                    name=record.get("name", ""),
+                    cache_total=record.get("cache_total_kb", ""),
+                    orca_temp=record.get("cache_orca_temp_kb", ""),
+                    generated_gcode=record.get("cache_generated_gcode_kb", ""),
+                    staged_model=record.get("cache_staged_model_kb", ""),
                 )
             )
         lines.extend(
@@ -216,8 +239,8 @@ def build_baseline_markdown(records: list[dict[str, Any]], baseline: dict[str, d
     lines = [
         "## Baseline Comparison",
         "",
-        "| Name | Slice ms delta | Preview plan ms delta | PSS KB delta | Native heap KB delta | Java heap KB delta | Bytes delta | Preview moves delta |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Name | Slice ms delta | Preview plan ms delta | PSS KB delta | Native heap KB delta | Java heap KB delta | App cache KB delta | Orca temp KB delta | Bytes delta | Preview moves delta |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     rows = 0
     for record in records:
@@ -229,7 +252,7 @@ def build_baseline_markdown(records: list[dict[str, Any]], baseline: dict[str, d
             continue
         rows += 1
         lines.append(
-            "| {name} | {elapsed} | {preview_plan_ms} | {pss} | {native} | {java} | {bytes} | {preview_moves} |".format(
+            "| {name} | {elapsed} | {preview_plan_ms} | {pss} | {native} | {java} | {cache_total} | {cache_orca_temp} | {bytes} | {preview_moves} |".format(
                 name=name,
                 elapsed=format_delta(record_metric(record, "elapsed_ms"), record_metric(previous, "elapsed_ms")),
                 preview_plan_ms=format_delta(
@@ -244,6 +267,14 @@ def build_baseline_markdown(records: list[dict[str, Any]], baseline: dict[str, d
                 java=format_delta(
                     record_metric(record, "peak_java_heap_kb"),
                     record_metric(previous, "peak_java_heap_kb"),
+                ),
+                cache_total=format_delta(
+                    record_metric(record, "cache_total_kb"),
+                    record_metric(previous, "cache_total_kb"),
+                ),
+                cache_orca_temp=format_delta(
+                    record_metric(record, "cache_orca_temp_kb"),
+                    record_metric(previous, "cache_orca_temp_kb"),
                 ),
                 bytes=format_delta(record_metric(record, "bytes"), record_metric(previous, "bytes")),
                 preview_moves=format_delta(
@@ -260,15 +291,18 @@ def regression_allowances() -> dict[str, tuple[float, float]]:
     slice_regression_percent = env_float("MOBILE_SLICER_PERF_SLICE_REGRESSION_PERCENT", 25.0)
     memory_regression_percent = env_float("MOBILE_SLICER_PERF_MEMORY_REGRESSION_PERCENT", 25.0)
     output_regression_percent = env_float("MOBILE_SLICER_PERF_OUTPUT_REGRESSION_PERCENT", 35.0)
+    disk_regression_percent = env_float("MOBILE_SLICER_PERF_DISK_REGRESSION_PERCENT", 25.0)
     startup_regression_min = env_int("MOBILE_SLICER_PERF_STARTUP_REGRESSION_MIN_MS", 250)
     slice_regression_min = env_int("MOBILE_SLICER_PERF_SLICE_REGRESSION_MIN_MS", 750)
     memory_regression_min = env_int("MOBILE_SLICER_PERF_MEMORY_REGRESSION_MIN_KB", 98_304)
     output_regression_min = env_int("MOBILE_SLICER_PERF_OUTPUT_REGRESSION_MIN_UNITS", 1024)
+    disk_regression_min = env_int("MOBILE_SLICER_PERF_DISK_REGRESSION_MIN_KB", 65_536)
     return {
         "startup": (startup_regression_percent, float(startup_regression_min)),
         "slice": (slice_regression_percent, float(slice_regression_min)),
         "memory": (memory_regression_percent, float(memory_regression_min)),
         "output": (output_regression_percent, float(output_regression_min)),
+        "disk": (disk_regression_percent, float(disk_regression_min)),
     }
 
 
@@ -288,6 +322,8 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
     max_native_heap_kb = env_int("MOBILE_SLICER_PERF_MAX_NATIVE_HEAP_KB", 700_000)
     max_graphics_kb = env_int("MOBILE_SLICER_PERF_MAX_GRAPHICS_KB", 350_000)
     max_private_other_kb = env_int("MOBILE_SLICER_PERF_MAX_PRIVATE_OTHER_KB", 550_000)
+    max_cache_total_kb = env_int("MOBILE_SLICER_PERF_MAX_CACHE_TOTAL_KB", 786_432)
+    max_cache_orca_temp_kb = env_int("MOBILE_SLICER_PERF_MAX_CACHE_ORCA_TEMP_KB", 393_216)
     max_preview_plan_ms = env_int("MOBILE_SLICER_PERF_MAX_PREVIEW_PLAN_MS", 1_500)
     min_processor_release_drop_kb = env_int("MOBILE_SLICER_PERF_MIN_PROCESSOR_RELEASE_DROP_KB", 16_384)
     max_native_after_stats_growth_kb = env_int("MOBILE_SLICER_PERF_MAX_NATIVE_AFTER_STATS_GROWTH_KB", 8_192)
@@ -308,6 +344,8 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
         peak_native_heap_kb = record_metric(record, "peak_native_heap_kb")
         peak_graphics_kb = record_metric(record, "peak_graphics_kb")
         peak_private_other_kb = record_metric(record, "peak_private_other_kb")
+        cache_total_kb = record_metric(record, "cache_total_kb")
+        cache_orca_temp_kb = record_metric(record, "cache_orca_temp_kb")
         output_bytes = record_metric(record, "bytes")
 
         if record_type == "startup":
@@ -385,6 +423,12 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
             failures.append(
                 f"{name}: private other memory {peak_private_other_kb:.0f}KB exceeds budget {max_private_other_kb}KB"
             )
+        if cache_total_kb is not None and cache_total_kb > max_cache_total_kb:
+            failures.append(f"{name}: app cache {cache_total_kb:.0f}KB exceeds budget {max_cache_total_kb}KB")
+        if cache_orca_temp_kb is not None and cache_orca_temp_kb > max_cache_orca_temp_kb:
+            failures.append(
+                f"{name}: Orca temp cache {cache_orca_temp_kb:.0f}KB exceeds budget {max_cache_orca_temp_kb}KB"
+            )
 
         previous = baseline.get(name) or baseline.get(base_name)
         if not previous:
@@ -416,6 +460,8 @@ def analyze(records: list[dict[str, Any]], baseline: dict[str, dict[str, Any]]) 
             "peak_native_heap_kb",
             "peak_graphics_kb",
             "peak_private_other_kb",
+            "cache_total_kb",
+            "cache_orca_temp_kb",
         ]:
             first_value = record_metric(first, metric)
             last_value = record_metric(last, metric)
@@ -467,7 +513,8 @@ def main() -> int:
                 f"{record.get('name')}: startupMs={record.get('startup_ms')} "
                 f"peakPssKb={record.get('peak_pss_kb')} javaHeapKb={record.get('peak_java_heap_kb')} "
                 f"nativeHeapKb={record.get('peak_native_heap_kb')} graphicsKb={record.get('peak_graphics_kb')} "
-                f"privateOtherKb={record.get('peak_private_other_kb')}"
+                f"privateOtherKb={record.get('peak_private_other_kb')} "
+                f"cacheTotalKb={record.get('cache_total_kb')} cacheOrcaTempKb={record.get('cache_orca_temp_kb')}"
             )
         elif record.get("type") == "slice":
             print(
@@ -492,6 +539,8 @@ def main() -> int:
                 f"nativeAfterReleaseRssKb={record.get('native_after_release_rss_kb')} "
                 f"nativeAfterStatsRssKb={record.get('native_after_stats_rss_kb')} "
                 f"nativeBeforeReturnRssKb={record.get('native_before_return_rss_kb')} "
+                f"cacheTotalKb={record.get('cache_total_kb')} "
+                f"cacheOrcaTempKb={record.get('cache_orca_temp_kb')} "
                 f"bytes={record.get('bytes')}"
             )
     if baseline:
@@ -509,6 +558,8 @@ def main() -> int:
                 f"pssDelta={format_delta(record_metric(record, 'peak_pss_kb'), record_metric(previous, 'peak_pss_kb'))} "
                 f"nativeHeapDelta={format_delta(record_metric(record, 'peak_native_heap_kb'), record_metric(previous, 'peak_native_heap_kb'))} "
                 f"javaHeapDelta={format_delta(record_metric(record, 'peak_java_heap_kb'), record_metric(previous, 'peak_java_heap_kb'))} "
+                f"cacheTotalDelta={format_delta(record_metric(record, 'cache_total_kb'), record_metric(previous, 'cache_total_kb'))} "
+                f"cacheOrcaTempDelta={format_delta(record_metric(record, 'cache_orca_temp_kb'), record_metric(previous, 'cache_orca_temp_kb'))} "
                 f"bytesDelta={format_delta(record_metric(record, 'bytes'), record_metric(previous, 'bytes'))}"
             )
     if failures:
