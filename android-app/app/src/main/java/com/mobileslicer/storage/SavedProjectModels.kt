@@ -185,6 +185,13 @@ private fun ViewerModelTransform.toJson(): JSONObject = JSONObject()
     .put("rotationYDegrees", rotationYDegrees)
     .put("rotationZDegrees", rotationZDegrees)
     .put("uniformScale", uniformScale)
+    .also { json ->
+        orientationMatrix?.takeIf { values -> values.size == 9 && values.all { it.isFinite() } }?.let { matrix ->
+            json.put("orientationMatrix", JSONArray().apply {
+                matrix.forEach { put(it) }
+            })
+        }
+    }
 
 private fun JSONObject.toViewerModelTransform(): ViewerModelTransform = ViewerModelTransform(
     centerXmm = optDouble("centerXmm", 0.0).toFloat(),
@@ -192,5 +199,9 @@ private fun JSONObject.toViewerModelTransform(): ViewerModelTransform = ViewerMo
     rotationXDegrees = optDouble("rotationXDegrees", 0.0).toFloat(),
     rotationYDegrees = optDouble("rotationYDegrees", 0.0).toFloat(),
     rotationZDegrees = optDouble("rotationZDegrees", 0.0).toFloat(),
-    uniformScale = optDouble("uniformScale", 1.0).toFloat()
+    uniformScale = optDouble("uniformScale", 1.0).toFloat(),
+    orientationMatrix = optJSONArray("orientationMatrix")?.let { array ->
+        List(array.length()) { index -> array.optDouble(index, Double.NaN).toFloat() }
+            .takeIf { values -> values.size == 9 && values.all { it.isFinite() } }
+    }
 )
