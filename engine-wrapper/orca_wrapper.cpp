@@ -29,6 +29,7 @@
 #include <atomic>
 #include <chrono>
 #include <cctype>
+#include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -95,6 +96,28 @@ struct OrcaEngineImpl {
 static constexpr bool kVerboseNativeTimingLogs = false;
 
 using namespace mobileslicer::orca_wrapper;
+
+static size_t current_process_rss_kb()
+{
+#ifdef __ANDROID__
+    FILE* status = std::fopen("/proc/self/status", "r");
+    if (status == nullptr) {
+        return 0;
+    }
+
+    char line[256];
+    size_t rss_kb = 0;
+    while (std::fgets(line, sizeof(line), status) != nullptr) {
+        if (std::sscanf(line, "VmRSS: %zu kB", &rss_kb) == 1) {
+            break;
+        }
+    }
+    std::fclose(status);
+    return rss_kb;
+#else
+    return 0;
+#endif
+}
 
 #if defined(MOBILE_SLICER_ENABLE_VGCODE)
 } // namespace
@@ -4141,14 +4164,15 @@ extern "C" int orca_slice(OrcaEngine* engine)
             "|nativeAfterFooterRssKb=" + std::to_string(gcode_result.mobile_after_footer_rss_kb) +
             "|nativeAfterGenerationRssKb=" + std::to_string(gcode_result.mobile_after_generation_rss_kb) +
             "|nativeAfterFinalizeRssKb=" + std::to_string(gcode_result.mobile_after_finalize_rss_kb) +
-            "|nativeAfterReleaseRssKb=" + std::to_string(gcode_result.mobile_after_release_rss_kb);
+            "|nativeAfterReleaseRssKb=" + std::to_string(gcode_result.mobile_after_release_rss_kb) +
+            "|nativeAfterStatsRssKb=" + std::to_string(gcode_result.mobile_after_stats_rss_kb);
 #else
         slice_metrics =
             "previewMoves=0|previewCacheBuilt=0|previewCacheComplete=0|previewCachedVertices=0|previewCacheBuildMs=0"
             "|gcodeBytes=" + std::to_string(gcode_size) +
             "|processorMoveBytes=0|processorLineEndBytes=0|previewLayerCountBytes=0|exactPreviewCacheEligible=0|processorMovesReleasedDuringExport=0"
             "|nativeExportStartRssKb=0|nativeAfterSetupRssKb=0|nativeAfterLayersRssKb=0|nativeAfterFooterRssKb=0"
-            "|nativeAfterGenerationRssKb=0|nativeAfterFinalizeRssKb=0|nativeAfterReleaseRssKb=0";
+            "|nativeAfterGenerationRssKb=0|nativeAfterFinalizeRssKb=0|nativeAfterReleaseRssKb=0|nativeAfterStatsRssKb=0";
 #endif
         const long summary_parse_ms = elapsed_ms_since(summary_parse_start);
         const float normal_print_time = gcode_result.print_statistics
@@ -4193,6 +4217,9 @@ extern "C" int orca_slice(OrcaEngine* engine)
             slice_metrics +
             "|processorMoveBytesRetained=0|processorLineEndBytesRetained=0|processorReleaseMs=0";
 #endif
+        const size_t native_before_return_rss_kb = current_process_rss_kb();
+        engine->impl.slice_metrics +=
+            "|nativeBeforeReturnRssKb=" + std::to_string(native_before_return_rss_kb);
         if (kVerboseNativeTimingLogs) {
             std::ostringstream message;
             message

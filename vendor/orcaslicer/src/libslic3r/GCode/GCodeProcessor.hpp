@@ -264,6 +264,7 @@ class Print;
         size_t mobile_after_generation_rss_kb{0};
         size_t mobile_after_finalize_rss_kb{0};
         size_t mobile_after_release_rss_kb{0};
+        size_t mobile_after_stats_rss_kb{0};
 
         BedType bed_type = BedType::btCount;
         void reset();
@@ -316,6 +317,7 @@ class Print;
             mobile_after_generation_rss_kb = other.mobile_after_generation_rss_kb;
             mobile_after_finalize_rss_kb = other.mobile_after_finalize_rss_kb;
             mobile_after_release_rss_kb = other.mobile_after_release_rss_kb;
+            mobile_after_stats_rss_kb = other.mobile_after_stats_rss_kb;
 #if ENABLE_GCODE_VIEWER_STATISTICS
             time = other.time;
 #endif

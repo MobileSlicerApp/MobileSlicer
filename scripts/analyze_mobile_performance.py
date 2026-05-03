@@ -176,13 +176,13 @@ def build_markdown(records: list[dict[str, Any]], failures: list[str]) -> str:
                 "",
                 "## Memory Attribution",
                 "",
-                "| Name | Peak PSS KB | Java heap KB | Native heap KB | Graphics KB | Private other KB | System KB |",
-                "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+                "| Name | Peak PSS KB | Java heap KB | Native heap KB | Graphics KB | Private other KB | System KB | Native after release KB | Native after stats KB | Native before return KB |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for record in records:
             lines.append(
-                "| {name} | {pss} | {java} | {native} | {graphics} | {private_other} | {system} |".format(
+                "| {name} | {pss} | {java} | {native} | {graphics} | {private_other} | {system} | {after_release} | {after_stats} | {before_return} |".format(
                     name=record.get("name", ""),
                     pss=record.get("peak_pss_kb", ""),
                     java=record.get("peak_java_heap_kb", ""),
@@ -190,6 +190,9 @@ def build_markdown(records: list[dict[str, Any]], failures: list[str]) -> str:
                     graphics=record.get("peak_graphics_kb", ""),
                     private_other=record.get("peak_private_other_kb", ""),
                     system=record.get("peak_system_kb", ""),
+                    after_release=record.get("native_after_release_rss_kb", ""),
+                    after_stats=record.get("native_after_stats_rss_kb", ""),
+                    before_return=record.get("native_before_return_rss_kb", ""),
                 )
             )
     return "\n".join(lines) + "\n"
@@ -464,6 +467,9 @@ def main() -> int:
                 f"peakPssKb={record.get('peak_pss_kb')} javaHeapKb={record.get('peak_java_heap_kb')} "
                 f"nativeHeapKb={record.get('peak_native_heap_kb')} graphicsKb={record.get('peak_graphics_kb')} "
                 f"privateOtherKb={record.get('peak_private_other_kb')} "
+                f"nativeAfterReleaseRssKb={record.get('native_after_release_rss_kb')} "
+                f"nativeAfterStatsRssKb={record.get('native_after_stats_rss_kb')} "
+                f"nativeBeforeReturnRssKb={record.get('native_before_return_rss_kb')} "
                 f"bytes={record.get('bytes')}"
             )
     if baseline:

@@ -2208,6 +2208,9 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessorResult* resu
 #endif
 //    DoExport::update_print_estimated_times_stats(m_processor, print->m_print_statistics);
     DoExport::update_print_estimated_stats(m_processor, m_writer.extruders(), print->m_print_statistics, print->config());
+#ifdef __ANDROID__
+    m_processor.result().mobile_after_stats_rss_kb = mobile_process_rss_kb();
+#endif
     if (result != nullptr) {
         *result = std::move(m_processor.extract_result());
         // set the filename to the correct value

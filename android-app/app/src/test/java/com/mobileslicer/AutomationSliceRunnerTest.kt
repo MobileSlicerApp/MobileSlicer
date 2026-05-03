@@ -52,7 +52,9 @@ class AutomationSliceRunnerTest {
                 nativeAfterFooterRssKb = 212,
                 nativeAfterGenerationRssKb = 222,
                 nativeAfterFinalizeRssKb = 303,
-                nativeAfterReleaseRssKb = 204
+                nativeAfterReleaseRssKb = 204,
+                nativeAfterStatsRssKb = 205,
+                nativeBeforeReturnRssKb = 206
             ),
             previewInfoMetrics = AutomationSlicePreviewInfoMetrics(
                 summaryHasRichPreviewInfo = true,
@@ -105,6 +107,8 @@ class AutomationSliceRunnerTest {
         assertTrue(status.contains("nativeAfterGenerationRssKb=222"))
         assertTrue(status.contains("nativeAfterFinalizeRssKb=303"))
         assertTrue(status.contains("nativeAfterReleaseRssKb=204"))
+        assertTrue(status.contains("nativeAfterStatsRssKb=205"))
+        assertTrue(status.contains("nativeBeforeReturnRssKb=206"))
         assertTrue(status.contains("previewInfoRich=1"))
         assertTrue(status.contains("previewInfoEnrichedRich=1"))
         assertTrue(status.contains("previewInfoLineTypes=2"))
@@ -132,7 +136,8 @@ class AutomationSliceRunnerTest {
                 "|gcodeBytes=89|processorMoveBytes=100|processorLineEndBytes=11|previewLayerCountBytes=12|exactPreviewCacheEligible=1" +
                 "|processorMovesReleasedDuringExport=1|processorMoveBytesRetained=0|processorLineEndBytesRetained=0|processorReleaseMs=3" +
                 "|nativeExportStartRssKb=101|nativeAfterSetupRssKb=151|nativeAfterLayersRssKb=202|nativeAfterFooterRssKb=212" +
-                "|nativeAfterGenerationRssKb=222|nativeAfterFinalizeRssKb=303|nativeAfterReleaseRssKb=204"
+                "|nativeAfterGenerationRssKb=222|nativeAfterFinalizeRssKb=303|nativeAfterReleaseRssKb=204" +
+                "|nativeAfterStatsRssKb=205|nativeBeforeReturnRssKb=206"
         )
 
         assertEquals(123L, metrics.previewMoves)
@@ -156,6 +161,8 @@ class AutomationSliceRunnerTest {
         assertEquals(222L, metrics.nativeAfterGenerationRssKb)
         assertEquals(303L, metrics.nativeAfterFinalizeRssKb)
         assertEquals(204L, metrics.nativeAfterReleaseRssKb)
+        assertEquals(205L, metrics.nativeAfterStatsRssKb)
+        assertEquals(206L, metrics.nativeBeforeReturnRssKb)
     }
 
     @Test

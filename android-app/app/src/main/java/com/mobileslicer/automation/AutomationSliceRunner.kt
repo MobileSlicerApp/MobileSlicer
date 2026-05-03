@@ -104,7 +104,9 @@ internal data class AutomationSliceNativeMetrics(
     val nativeAfterFooterRssKb: Long = 0L,
     val nativeAfterGenerationRssKb: Long = 0L,
     val nativeAfterFinalizeRssKb: Long = 0L,
-    val nativeAfterReleaseRssKb: Long = 0L
+    val nativeAfterReleaseRssKb: Long = 0L,
+    val nativeAfterStatsRssKb: Long = 0L,
+    val nativeBeforeReturnRssKb: Long = 0L
 )
 
 internal data class AutomationSlicePreviewInfoMetrics(
@@ -171,6 +173,8 @@ internal fun automationSliceSuccessStatus(
         "nativeAfterGenerationRssKb=${nativeMetrics.nativeAfterGenerationRssKb} " +
         "nativeAfterFinalizeRssKb=${nativeMetrics.nativeAfterFinalizeRssKb} " +
         "nativeAfterReleaseRssKb=${nativeMetrics.nativeAfterReleaseRssKb} " +
+        "nativeAfterStatsRssKb=${nativeMetrics.nativeAfterStatsRssKb} " +
+        "nativeBeforeReturnRssKb=${nativeMetrics.nativeBeforeReturnRssKb} " +
         "previewInfoRich=${if (previewInfoMetrics.summaryHasRichPreviewInfo) 1 else 0} " +
         "previewInfoEnrichedRich=${if (previewInfoMetrics.enrichedHasRichPreviewInfo) 1 else 0} " +
         "previewInfoLineTypes=${previewInfoMetrics.lineTypeCount} " +
@@ -223,7 +227,9 @@ internal fun parseAutomationSliceNativeMetrics(metricsText: String?): Automation
         nativeAfterFooterRssKb = fields["nativeAfterFooterRssKb"]?.toLongOrNull() ?: 0L,
         nativeAfterGenerationRssKb = fields["nativeAfterGenerationRssKb"]?.toLongOrNull() ?: 0L,
         nativeAfterFinalizeRssKb = fields["nativeAfterFinalizeRssKb"]?.toLongOrNull() ?: 0L,
-        nativeAfterReleaseRssKb = fields["nativeAfterReleaseRssKb"]?.toLongOrNull() ?: 0L
+        nativeAfterReleaseRssKb = fields["nativeAfterReleaseRssKb"]?.toLongOrNull() ?: 0L,
+        nativeAfterStatsRssKb = fields["nativeAfterStatsRssKb"]?.toLongOrNull() ?: 0L,
+        nativeBeforeReturnRssKb = fields["nativeBeforeReturnRssKb"]?.toLongOrNull() ?: 0L
     )
 }
 
