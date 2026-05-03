@@ -107,6 +107,24 @@ class ModelLoaderProjectActionsTest {
     }
 
     @Test
+    fun openSavedProjectStateReturnsNullWhenAnyModelFileIsMissing() {
+        val existingFile = File.createTempFile("mobileslicer-project-open-existing-", ".stl")
+        try {
+            existingFile.writeText(minimalStl())
+            val project = savedProject(
+                plateObjects = listOf(
+                    savedPlateObject(filePath = existingFile.absolutePath),
+                    savedPlateObject(filePath = "/missing/project-model.stl")
+                )
+            )
+
+            assertNull(openSavedProjectState(project))
+        } finally {
+            existingFile.delete()
+        }
+    }
+
+    @Test
     fun savePlatePromptFailsForEmptyPlateAndSuggestsProjectNameForObjects() {
         val emptyPlan = planSavePlatePrompt(emptyList(), currentModelLabel = "Fallback Model")
         assertEquals(ModelLoaderSavePlatePromptPlan.Fail("No plate to save"), emptyPlan)
@@ -163,17 +181,7 @@ class ModelLoaderProjectActionsTest {
         val file = File.createTempFile("mobileslicer-project-open-", ".stl")
         try {
             file.writeText(
-                """
-                solid saved
-                  facet normal 0 0 1
-                    outer loop
-                      vertex 0 0 0
-                      vertex 10 0 0
-                      vertex 0 10 1
-                    endloop
-                  endfacet
-                endsolid saved
-                """.trimIndent()
+                minimalStl()
             )
             val project = savedProject(
                 plateObjects = listOf(savedPlateObject(filePath = file.absolutePath)),
@@ -224,6 +232,19 @@ class ModelLoaderProjectActionsTest {
             ),
             transform = ViewerModelTransform(centerXmm = 5f, centerYmm = 5f)
         )
+
+    private fun minimalStl(): String =
+        """
+        solid saved
+          facet normal 0 0 1
+            outer loop
+              vertex 0 0 0
+              vertex 10 0 0
+              vertex 0 10 1
+            endloop
+          endfacet
+        endsolid saved
+        """.trimIndent()
 
     private fun plateObjectForPrompt(label: String): com.mobileslicer.workspace.PlateObject =
         com.mobileslicer.workspace.PlateObject(

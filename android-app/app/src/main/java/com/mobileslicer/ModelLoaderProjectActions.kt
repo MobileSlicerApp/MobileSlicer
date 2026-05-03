@@ -226,8 +226,10 @@ internal fun loadSavedProjectPlateObjects(project: SavedProject): List<PlateObje
     }
 
 internal fun openSavedProjectState(project: SavedProject): ModelLoaderSavedProjectOpenResult? {
+    if (project.plateObjects.isEmpty()) return null
+    if (project.plateObjects.any { !File(it.filePath).exists() }) return null
     val loadedObjects = loadSavedProjectPlateObjects(project)
-    if (loadedObjects.isEmpty()) return null
+    if (loadedObjects.size != project.plateObjects.size) return null
     val activeConfiguration = project.profileStore.activeConfiguration()
     val filamentSlots = project.filamentSlots.ifEmpty {
         listOf(activeConfiguration.filament.toPlateFilamentSlot(index = 1))
