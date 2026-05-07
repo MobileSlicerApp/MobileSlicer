@@ -1,11 +1,20 @@
 # MobileSlicer
 
+[![Android Checks](https://github.com/Nokoro1/MobileSlicer/actions/workflows/android-checks.yml/badge.svg)](https://github.com/Nokoro1/MobileSlicer/actions/workflows/android-checks.yml)
+
+<p>
+  <img src="docs/brand/mobileslicer-logo.svg" alt="MobileSlicer logo" width="96">
+</p>
+
 MobileSlicer is a local, touch-first 3D slicer for Android.
 
 It opens STL and 3MF files, prepares plates, slices on-device, previews G-code,
 and exports or sends print files from a phone or tablet. The app is built for
 Android with Kotlin, Jetpack Compose, and a native slicer engine derived from
 OrcaSlicer and related open-source slicer work.
+
+Public beta access is planned through Google Play. APKs are not distributed from
+GitHub or the website.
 
 MobileSlicer is not affiliated with, endorsed by, or sponsored by the OrcaSlicer
 project.
@@ -61,13 +70,16 @@ cd android-app
 Release builds require local signing configuration that is intentionally not
 tracked in git.
 
-## Website And Support
+This repository includes vendored native slicer sources and generated profile
+assets, so a checkout is larger than a typical Android-only app.
+
+## Website and Support
 
 - Website: <https://mobileslicer.com>
 - Support email: <mobileslicerapp@gmail.com>
 - Discord: <https://discord.gg/ckAAYAhRxE>
 
-## License And Source
+## License and Source
 
 MobileSlicer release source is distributed under the GNU Affero General Public
 License version 3. See [LICENSE](LICENSE), [SOURCE_NOTICE.md](SOURCE_NOTICE.md),
