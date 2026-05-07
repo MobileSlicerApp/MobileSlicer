@@ -55,12 +55,18 @@ val includeX86_64Abi = providers.gradleProperty("mobileSlicer.includeX86_64Abi")
 
 android {
     namespace = "com.mobileslicer"
-    compileSdk = 34
+    compileSdk = 35
+
+    lint {
+        // Android 16/API 36 targeting needs a separate compatibility pass before
+        // beta builds opt in to the new runtime behavior.
+        disable += "OldTargetApi"
+    }
 
     defaultConfig {
         applicationId = "com.mobileslicer"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = mobileSlicerVersionCode
         versionName = mobileSlicerVersionName
 

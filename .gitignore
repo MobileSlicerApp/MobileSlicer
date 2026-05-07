@@ -2,7 +2,7 @@
 .android-sdk/
 .idea/
 
-# Keep local docs/site/operator files out of the public GitHub repo.
+# Local-only project notes and website deployment files.
 /README/
 /Website/
 

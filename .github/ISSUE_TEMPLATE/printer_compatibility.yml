@@ -1,0 +1,55 @@
+name: Printer compatibility
+description: Report printer profile, upload, or network printing behavior.
+title: "[Printer]: "
+labels: ["printer-compatibility"]
+body:
+  - type: input
+    id: printer
+    attributes:
+      label: Printer model
+      placeholder: "Bambu Lab P1S, Voron 2.4, Prusa MK4, etc."
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware or host
+      placeholder: "Klipper/Moonraker, OctoPrint, PrusaLink, Bambu LAN, etc."
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: MobileSlicer version or commit
+      placeholder: "0.1.0 beta, or commit SHA"
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection path
+      options:
+        - Export/share only
+        - OctoPrint / Klipper
+        - Bambu LAN
+        - PrusaLink / PrusaConnect
+        - Duet
+        - Obico
+        - SimplyPrint
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: What worked, what failed, and any error text shown by the app.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Include non-sensitive logs, screenshots, profile details, or exact steps if helpful.
+    validations:
+      required: false

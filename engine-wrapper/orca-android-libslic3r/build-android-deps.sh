@@ -2,7 +2,18 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-NDK_ROOT="$PROJECT_ROOT/.android-sdk/ndk/26.1.10909125"
+if [ -n "${ANDROID_NDK_HOME:-}" ]; then
+    NDK_ROOT="$ANDROID_NDK_HOME"
+elif [ -n "${ANDROID_NDK_ROOT:-}" ]; then
+    NDK_ROOT="$ANDROID_NDK_ROOT"
+elif [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/ndk" ]; then
+    NDK_ROOT="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+elif [ -d "$PROJECT_ROOT/.android-sdk/ndk" ]; then
+    NDK_ROOT="$(find "$PROJECT_ROOT/.android-sdk/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+else
+    echo "Android NDK not found. Set ANDROID_NDK_HOME or ANDROID_HOME before running this script." >&2
+    exit 2
+fi
 TOOLCHAIN="$NDK_ROOT/build/cmake/android.toolchain.cmake"
 LLVM_BIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
 SYSROOT="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot"

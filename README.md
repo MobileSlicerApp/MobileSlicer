@@ -2,10 +2,6 @@
 
 [![Android Checks](https://github.com/Nokoro1/MobileSlicer/actions/workflows/android-checks.yml/badge.svg)](https://github.com/Nokoro1/MobileSlicer/actions/workflows/android-checks.yml)
 
-<p>
-  <img src="docs/brand/mobileslicer-logo.svg" alt="MobileSlicer logo" width="96">
-</p>
-
 MobileSlicer is a local, touch-first 3D slicer for Android.
 
 It opens STL and 3MF files, prepares plates, slices on-device, previews G-code,
@@ -78,6 +74,15 @@ assets, so a checkout is larger than a typical Android-only app.
 - Website: <https://mobileslicer.com>
 - Support email: <mobileslicerapp@gmail.com>
 - Discord: <https://discord.gg/ckAAYAhRxE>
+
+## Issues and Releases
+
+Use GitHub issues for reproducible bugs, build problems, and printer
+compatibility notes. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a
+report.
+
+Release tags will be used for Google Play beta source snapshots. APKs are not
+attached to GitHub releases.
 
 ## License and Source
 

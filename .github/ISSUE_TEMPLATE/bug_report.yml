@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a reproducible MobileSlicer problem.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem. Please remove private files, printer credentials, API keys, and account details before posting.
+  - type: input
+    id: version
+    attributes:
+      label: MobileSlicer version or commit
+      description: Use the app version from Google Play or the Git commit you built.
+      placeholder: "0.1.0 beta, or commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Android device
+      placeholder: "Pixel 8, Galaxy Tab S9, etc."
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      placeholder: "Android 14"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the failure and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Import ...
+        3. Tap ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Import
+        - Workspace
+        - Profiles
+        - Slicing
+        - G-code preview
+        - Export/share
+        - Printer connection
+        - Calibration
+        - Build from source
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Attach logs or screenshots if useful. Remove private data first.
+    validations:
+      required: false
