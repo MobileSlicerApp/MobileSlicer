@@ -14,8 +14,10 @@ project.
 
 ## Status
 
-MobileSlicer is preparing for a public Google Play beta. APKs are not
-distributed from the website or this repository.
+MobileSlicer beta builds are distributed through GitHub Releases. Download APKs
+only from the official releases page:
+
+<https://github.com/MobileSlicerApp/MobileSlicer/releases>
 
 Current focus:
 
@@ -78,8 +80,8 @@ Use GitHub issues for reproducible bugs, build problems, and printer
 compatibility notes. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a
 report.
 
-Release tags will be used for Google Play beta source snapshots. APKs are not
-attached to GitHub releases.
+GitHub Releases provide signed beta APKs and matching source snapshots. The
+website links back to GitHub for downloads.
 
 ## License and Source
 

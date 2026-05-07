@@ -27,4 +27,4 @@ rotate it before sending a report.
 
 ## Updates
 
-Security fixes for beta builds are distributed through Google Play beta updates.
+Security fixes for beta builds are distributed through GitHub Releases.

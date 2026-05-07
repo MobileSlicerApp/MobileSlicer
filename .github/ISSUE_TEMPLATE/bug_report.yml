@@ -11,8 +11,8 @@ body:
     id: version
     attributes:
       label: MobileSlicer version or commit
-      description: Use the app version from Google Play or the Git commit you built.
-      placeholder: "0.1.0 beta, or commit SHA"
+      description: Use the app version from GitHub Releases or the Git commit you built.
+      placeholder: "0.1.0-beta, or commit SHA"
     validations:
       required: true
   - type: input
