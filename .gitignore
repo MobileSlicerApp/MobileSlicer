@@ -1,5 +1,6 @@
 # Local tooling and editor state
 .android-sdk/
+.android-native-deps/
 .idea/
 
 # Local-only project notes and website deployment files.

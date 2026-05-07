@@ -15,7 +15,10 @@ jobs:
   verify:
     name: Verify Android App
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
+    env:
+      ORCA_ANDROID_DEPS_ROOT: ${{ github.workspace }}/.android-native-deps/install
+      ORCA_ANDROID_DEPS_SRC_ROOT: ${{ github.workspace }}/.android-native-deps/src
 
     steps:
       - name: Check out repository
@@ -49,6 +52,18 @@ jobs:
       - name: Run Android debug lint
         working-directory: android-app
         run: ./gradlew lintDebug
+
+      - name: Cache Android native dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .android-native-deps/install
+            .android-native-deps/src
+            engine-wrapper/orca-android-libslic3r/android-deps-build
+          key: android-native-deps-${{ runner.os }}-arm64-v1-${{ hashFiles('engine-wrapper/orca-android-libslic3r/build-android-deps.sh') }}
+
+      - name: Build Android native dependencies
+        run: engine-wrapper/orca-android-libslic3r/build-android-deps.sh
 
       - name: Assemble debug APK
         working-directory: android-app

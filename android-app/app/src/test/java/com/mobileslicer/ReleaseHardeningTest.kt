@@ -70,7 +70,11 @@ class ReleaseHardeningTest {
     @Test
     fun manifestCleartextIsDocumentedAndRuntimeGatedForPrinterNetworking() {
         val application = androidManifest().documentElement.children("application").single()
-        assertEquals("true", application.androidAttr("usesCleartextTraffic"))
+        assertEquals("@xml/network_security_config", application.androidAttr("networkSecurityConfig"))
+        assertEquals("", application.androidAttr("usesCleartextTraffic"))
+
+        val networkSecurityConfig = resourceXml("xml/network_security_config.xml").documentElement
+        assertEquals("true", networkSecurityConfig.children("base-config").single().attr("cleartextTrafficPermitted"))
 
         val urlGuards = File("src/main/java/com/mobileslicer/printerconnection/PrinterConnectionUrls.kt").readText()
         assertTrue(urlGuards.contains("requireAllowedPrinterBaseUrl"))

@@ -52,6 +52,12 @@ val hasReleaseSigningConfig = listOf(
 val includeX86_64Abi = providers.gradleProperty("mobileSlicer.includeX86_64Abi")
     .map(String::toBoolean)
     .getOrElse(false)
+val orcaAndroidDepsRoot = providers.environmentVariable("ORCA_ANDROID_DEPS_ROOT")
+    .orNull
+    ?: "/tmp/orca-deps-install"
+val orcaAndroidDepsSrcRoot = providers.environmentVariable("ORCA_ANDROID_DEPS_SRC_ROOT")
+    .orNull
+    ?: "/tmp/orca-deps-src"
 
 android {
     namespace = "com.mobileslicer"
@@ -87,7 +93,9 @@ android {
                 arguments += listOf(
                     "-DANDROID_STL=c++_static",
                     "-DORCA_SHIPPING_REQUIRE_REAL_LIBSLIC3R=ON",
-                    "-DORCA_SHIPPING_ALLOW_REDUCED_WRAPPER=OFF"
+                    "-DORCA_SHIPPING_ALLOW_REDUCED_WRAPPER=OFF",
+                    "-DORCA_ANDROID_DEPS_ROOT=$orcaAndroidDepsRoot",
+                    "-DORCA_ANDROID_DEPS_SRC_ROOT=$orcaAndroidDepsSrcRoot"
                 )
             }
         }
@@ -115,9 +123,9 @@ android {
         debug {
             isJniDebuggable = true
             isMinifyEnabled = false
-            versionNameSuffix = "-workspace-surface-v1"
+            versionNameSuffix = "-debug"
             buildConfigField("boolean", "AUTOMATION_ENABLED", "true")
-            buildConfigField("String", "VIEWER_BUILD_STAMP", "\"viewer-build: surface-thread-workspace-v1\"")
+            buildConfigField("String", "VIEWER_BUILD_STAMP", "\"viewer-build: debug\"")
             externalNativeBuild {
                 cmake {
                     arguments += "-DMOBILE_SLICER_BUILD_NATIVE_PAINT_PROBES=ON"

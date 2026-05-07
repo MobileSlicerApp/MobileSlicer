@@ -21,7 +21,7 @@
 - Rebase risk:
   - Medium/high. `TriangleSelector` and nesting/planning code are active Orca internals.
 - Validation:
-  - Full Android release gate passed at `artifacts/release-gates/20260507-074713/summary.md`.
+  - Validated with the Android release gate on 2026-05-07.
 
 ## Policy
 

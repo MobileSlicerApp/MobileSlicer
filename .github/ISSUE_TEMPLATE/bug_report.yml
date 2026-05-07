@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report a problem. Please remove private files, printer credentials, API keys, and account details before posting.
+        Include enough detail to reproduce the issue. Remove private files, printer credentials, API keys, and account details before posting.
   - type: input
     id: version
     attributes:

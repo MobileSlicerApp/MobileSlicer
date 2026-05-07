@@ -1,8 +1,8 @@
 # Source And License Notice
 
-MobileSlicer is a local, touch-first 3D slicer for Android. It includes
-MobileSlicer application code and native slicer components derived from
-OrcaSlicer, libSlic3r, and related open-source slicer projects.
+MobileSlicer is a local, touch-first 3D slicer for Android. This repository
+includes the Android app, native wrapper code, and slicer components derived
+from OrcaSlicer, libSlic3r, and related open-source slicer projects.
 
 MobileSlicer is not affiliated with, endorsed by, or sponsored by the
 OrcaSlicer project.

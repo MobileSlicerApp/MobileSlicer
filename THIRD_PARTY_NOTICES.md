@@ -1,7 +1,8 @@
 # Third-Party Notices
 
-MobileSlicer includes MobileSlicer application code and native slicer components
-derived from OrcaSlicer, libSlic3r, and related open-source projects.
+This repository includes the MobileSlicer Android app, native wrapper code, and
+slicer components derived from OrcaSlicer, libSlic3r, and related open-source
+slicer projects.
 
 MobileSlicer is not affiliated with, endorsed by, or sponsored by the
 OrcaSlicer project.

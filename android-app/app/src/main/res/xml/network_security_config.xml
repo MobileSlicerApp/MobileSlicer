@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="InsecureBaseConfiguration">
+    <!-- LAN printer APIs commonly use HTTP on private network addresses. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

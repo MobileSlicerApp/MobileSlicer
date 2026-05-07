@@ -9,9 +9,6 @@ and exports or sends print files from a phone or tablet. The app is built for
 Android with Kotlin, Jetpack Compose, and a native slicer engine derived from
 OrcaSlicer and related open-source slicer work.
 
-Public beta access is planned through Google Play. APKs are not distributed from
-GitHub or the website.
-
 MobileSlicer is not affiliated with, endorsed by, or sponsored by the OrcaSlicer
 project.
 
