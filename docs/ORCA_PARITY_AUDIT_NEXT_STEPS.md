@@ -340,10 +340,10 @@ Before claiming broad Orca support, keep these as mandatory gates:
 - `git diff --check`
 
 The Android release gate now runs both `orca-project-parity-matrix` and the
-full `orca-project-parity-device-matrix <serial>` instead of only the base
-`orca-3mf-roundtrip-device` case. That means release validation covers the base
-package, rich object settings, modifier volumes/settings, and height ranges on
-device whenever device automation is available.
+full `orca-project-parity-device-matrix <serial>`. The device matrix includes
+the base `orca-3mf-roundtrip-device` case plus rich object settings, modifier
+volumes/settings, and height ranges, so release validation does not drop the
+simple active-multifilament package while expanding richer project coverage.
 
 ## Recommended Next Step
 

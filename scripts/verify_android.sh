@@ -620,6 +620,7 @@ run_orca_project_parity_matrix_gate() {
 run_orca_project_parity_device_matrix_gate() {
   local serial="$1"
   log "Running Orca project parity device matrix on $serial"
+  run_orca_3mf_roundtrip_device_gate "$serial"
   run_orca_rich_project_roundtrip_device_gate "$serial"
   run_orca_modifier_project_roundtrip_device_gate "$serial"
   run_orca_height_range_project_roundtrip_device_gate "$serial"

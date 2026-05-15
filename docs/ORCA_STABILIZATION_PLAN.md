@@ -29,7 +29,7 @@ below as release gates before claiming broad Orca support.
 
 ## Next Release Gates
 
-1. Keep the Orca project parity matrix green: `scripts/verify_android.sh orca-project-parity-matrix` and, with a connected device, `scripts/verify_android.sh orca-project-parity-device-matrix <serial>`. The matrix covers the base Orca package, rich multi-plate object settings, modifier volumes/settings, height ranges/settings, per-plate thumbnail indices, plate JSON metadata for sliced package fixtures, object names, filament assignments, and project settings.
+1. Keep the Orca project parity matrix green: `scripts/verify_android.sh orca-project-parity-matrix` and, with a connected device, `scripts/verify_android.sh orca-project-parity-device-matrix <serial>`. The local and device matrices cover the base Orca package, rich multi-plate object settings, modifier volumes/settings, height ranges/settings, per-plate thumbnail indices, plate JSON metadata for sliced package fixtures, object names, filament assignments, and project settings.
 2. Keep the object-process G-code isolation gate green; it now slices a generated two-object 3MF and verifies the object override changes only one object region.
 3. Keep the Orca object label parity gate green; it verifies all `gcode_label_objects`/`exclude_object` combinations plus a printable label-off Moonraker metadata path when `MOBILE_SLICER_MOONRAKER_URL` is available.
 4. Keep workspace copy performance tests green, especially `WorkspaceObjectUploadManagerTest`, before changing object duplication, arrangement, or viewer upload code.
