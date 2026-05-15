@@ -46,6 +46,14 @@ EXPECTED_ROLES = {
     "pick": {"camera_mode": "top_plate", "picking": True, "ban_light": True},
 }
 
+EXPECTED_FRAMING_FIXTURES = {
+    "cube",
+    "tall_box",
+    "narrow_strip",
+    "broad_mid_height",
+    "h2d_two_object_layout",
+}
+
 
 @dataclass(frozen=True)
 class GateResult:
@@ -101,6 +109,13 @@ def compile_and_run_probe(root: Path) -> dict[str, object]:
             text=True,
         )
     return json.loads(result.stdout)
+
+
+def close_enough(actual: object, expected: float, tolerance: float = 0.01) -> bool:
+    try:
+        return abs(float(actual) - expected) <= tolerance
+    except (TypeError, ValueError):
+        return False
 
 
 def audit(root: Path) -> tuple[list[GateResult], dict[str, object]]:
@@ -202,6 +217,50 @@ def audit(root: Path) -> tuple[list[GateResult], dict[str, object]]:
             label="probe-constants-match-kotlin-policy",
             ok=not constant_failures,
             detail="constants match" if not constant_failures else "; ".join(constant_failures),
+        )
+    )
+    framing = {fixture["id"]: fixture for fixture in payload.get("framing_fixtures", [])}
+    missing_fixtures = sorted(EXPECTED_FRAMING_FIXTURES - set(framing))
+    results.append(
+        GateResult(
+            label="probe-emits-deterministic-framing-fixtures",
+            ok=not missing_fixtures,
+            detail="fixtures present" if not missing_fixtures else ", ".join(missing_fixtures),
+        )
+    )
+    framing_failures: list[str] = []
+    expected_zoom_margins = {
+        "cube": 1.025,
+        "tall_box": 1.025,
+        "narrow_strip": 1.025,
+        "broad_mid_height": 1.38,
+        "h2d_two_object_layout": 1.025,
+    }
+    for fixture_id, expected_margin in expected_zoom_margins.items():
+        actual = framing.get(fixture_id, {}).get("zoom_margin_factor")
+        if not close_enough(actual, expected_margin):
+            framing_failures.append(f"{fixture_id}.zoom_margin_factor={actual!r} expected {expected_margin}")
+    cube = framing.get("cube", {})
+    tall = framing.get("tall_box", {})
+    narrow = framing.get("narrow_strip", {})
+    h2d = framing.get("h2d_two_object_layout", {})
+    if not close_enough(cube.get("expanded_bounds", {}).get("min_x"), -10.2):
+        framing_failures.append("cube expanded min_x should include 1% horizontal padding")
+    if not close_enough(cube.get("expanded_bounds", {}).get("min_z"), -0.4):
+        framing_failures.append("cube expanded min_z should include 2% vertical padding")
+    if float(tall.get("angled_half_height", 0.0)) <= float(cube.get("angled_half_height", 0.0)):
+        framing_failures.append("tall_box should require more angled vertical extent than cube")
+    if float(narrow.get("projected_width", 0.0)) <= float(cube.get("projected_width", 0.0)):
+        framing_failures.append("narrow_strip should project wider than cube")
+    if not close_enough(h2d.get("top_half_width"), 178.5):
+        framing_failures.append("h2d top_half_width should reflect 350mm bed with 1.02 margin")
+    if not close_enough(h2d.get("camera_distance_mm"), 1400.0):
+        framing_failures.append("h2d camera distance should use max bed span * 4")
+    results.append(
+        GateResult(
+            label="probe-framing-metrics-match-policy-invariants",
+            ok=not framing_failures,
+            detail="framing invariants match" if not framing_failures else "; ".join(framing_failures),
         )
     )
     return results, payload

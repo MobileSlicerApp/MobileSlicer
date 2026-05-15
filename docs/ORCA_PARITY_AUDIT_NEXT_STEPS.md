@@ -133,6 +133,14 @@ source still contains the role markers the contract depends on. This gives the
 renderer-port work a real buildable artifact without pretending full
 `GLCanvas3D` can be imported directly.
 
+The probe has also moved past constants-only coverage. It emits deterministic
+framing metrics for cube, tall, narrow, broad-mid-height, and H2D-style
+two-object layouts. The gate asserts expanded bounds, broad-footprint zoom
+selection, camera distance, top-plate extent, and relative projected-size
+invariants. This still is not pixel rendering, but it is the correct next
+layer of Orca renderer parity proof before attempting shader or framebuffer
+extraction.
+
 ### Sliced 3MF Bbox JSON
 
 MobileSlicer now generates `PlateBBoxData` after native slicing and attaches it

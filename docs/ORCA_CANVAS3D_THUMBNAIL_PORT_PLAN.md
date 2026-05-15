@@ -95,6 +95,21 @@ Current extraction probe:
   - `no_light` and `pick` carry `ban_light`,
   - `pick` carries `picking`,
   - small-thumbnail supersampling limits match the Android policy.
+- It now emits deterministic framing metrics for representative fixture
+  bounds:
+  - cube,
+  - tall box,
+  - narrow strip,
+  - broad mid-height footprint,
+  - H2D-style two-object/two-filament layout.
+- Those metrics cover:
+  - expanded volume boxes,
+  - footprint and height,
+  - broad-footprint zoom-margin selection,
+  - camera distance from bed span,
+  - angled projected extents,
+  - angled orthographic half-extents,
+  - top-plate half-extents.
 - It intentionally does not include or reference desktop renderer code in the
   compiled body: no wxWidgets, `GUI_App`, `MainFrame`, `Plater`,
   `GLCanvas3D`, `GLVolumeCollection`, `GLShaderProgram`, or
@@ -102,12 +117,17 @@ Current extraction probe:
 - `scripts/orca_thumbnail_extraction_probe_gate.py --pretty` compiles and runs
   the probe, verifies the emitted contract against
   `OrcaThumbnailRenderPolicy.kt`, and verifies the vendored Orca source still
-  exposes the thumbnail markers the contract is based on.
+  exposes the thumbnail markers the contract is based on. The gate also asserts
+  framing invariants, including the 1% horizontal/2% vertical expanded bounds,
+  the broad-footprint `1.38` zoom margin case, the H2D `350mm * 1.02 / 2`
+  top-plate extent, and relative projected-size behavior for tall and narrow
+  fixtures.
 - `scripts/verify_android.sh script-tests` now runs that gate.
 
-This is not yet a replacement renderer. It is the first shippable-quality
-constraint on the extraction path: if the contract changes, the gate fails
-before any Android thumbnail behavior can drift silently.
+This is not yet a replacement renderer and it does not produce pixels. It is
+the first shippable-quality math constraint on the extraction path: if the role
+contract or deterministic framing behavior changes, the gate fails before any
+Android thumbnail behavior can drift silently.
 
 Current implementation checkpoint:
 
