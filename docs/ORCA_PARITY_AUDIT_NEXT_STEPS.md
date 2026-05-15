@@ -114,6 +114,16 @@ desktop Orca. If pixel-identical thumbnails become a requirement, the remaining
 route is still an Orca Canvas3D render-port spike, documented separately in
 `docs/ORCA_CANVAS3D_THUMBNAIL_PORT_PLAN.md`.
 
+The Canvas3D track now has a stronger source-level gate. `python3
+scripts/orca_thumbnail_port_audit.py --pretty` reports both the required Orca
+thumbnail entry points and the direct `GLCanvas3D` import blockers. The current
+verdict is that a direct import is not feasible as a shipping path until the
+wxWidgets, desktop GUI singleton, desktop plater, desktop OpenGLManager,
+`GLVolumeCollection`, and `GLShaderProgram` dependencies are extracted or
+replaced. That keeps the project honest: current thumbnails are Orca-compatible
+and desktop-reference-gated, while implementation-identical Orca renderer
+parity remains a separate extraction task.
+
 ### Sliced 3MF Bbox JSON
 
 MobileSlicer now generates `PlateBBoxData` after native slicing and attaches it

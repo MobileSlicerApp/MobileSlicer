@@ -29,6 +29,16 @@ class OrcaThumbnailPortAuditTest(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertTrue(payload["ok"])
         self.assertGreaterEqual(payload["summary"]["checked"], 10)
+        self.assertIn("port_assessment", payload)
+        self.assertFalse(payload["port_assessment"]["direct_glcanvas3d_import_feasible"])
+        self.assertGreater(payload["port_assessment"]["direct_glcanvas3d_blocker_count"], 0)
+        found_blockers = [
+            blocker["label"]
+            for blocker in payload["direct_glcanvas3d_blockers"]
+            if blocker["found"]
+        ]
+        self.assertIn("wx-glcanvas-constructor", found_blockers)
+        self.assertIn("thumbnail-requires-gui-volume-scene", found_blockers)
 
     def test_reports_missing_source_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -55,6 +65,7 @@ class OrcaThumbnailPortAuditTest(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("orca-framebuffer-entry", payload["failures"])
         self.assertIn("production-egl-renderer", payload["failures"])
+        self.assertIn("port_assessment", payload)
 
 
 if __name__ == "__main__":

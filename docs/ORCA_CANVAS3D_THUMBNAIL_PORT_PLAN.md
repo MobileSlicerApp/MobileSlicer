@@ -52,8 +52,36 @@ python3 scripts/orca_thumbnail_port_audit.py --pretty
 ```
 
 That audit checks the exact Orca desktop thumbnail entry points, the Android
-EGL/native build boundary, and the production/automation renderer wiring. It is
-also part of `scripts/verify_android.sh script-tests`.
+EGL/native build boundary, the production/automation renderer wiring, and the
+direct `GLCanvas3D` import blockers. It is also part of
+`scripts/verify_android.sh script-tests`.
+
+The audit is intentionally allowed to pass while reporting that direct
+`GLCanvas3D` import is not currently feasible. That is not a fallback claim; it
+is the evidence-backed boundary for doing the port correctly. A future direct
+renderer import must first drive the blocker count down by extracting or
+replacing the desktop-only pieces instead of hiding them.
+
+Current direct-import blocker classes recorded by the audit:
+
+- `GLCanvas3D.hpp` includes wxWidgets and constructs around `wxGLCanvas`.
+- `GLCanvas3D.cpp` imports desktop GUI app/frame/plater state.
+- thumbnail rendering pulls shaders and plater state through `wxGetApp()`.
+- framebuffer selection is mediated through desktop `OpenGLManager`.
+- public thumbnail entry points require `PartPlateList`,
+  `ModelObjectPtrs`, `GLVolumeCollection`, and `GLShaderProgram`.
+- Orca's CLI thumbnail path also builds a GUI `GLVolumeCollection` scene before
+  rendering package thumbnails.
+
+The only acceptable production path until those blockers are removed is:
+
+1. keep Orca native code responsible for thumbnail request parsing,
+   G-code thumbnail block writing, and sliced-3MF package writing,
+2. keep Android rendering behind the existing EGL thumbnail boundary,
+3. continue importing source-backed Orca camera, role, lighting, picking, and
+   framing behavior through `OrcaThumbnailRenderPolicy`,
+4. require desktop-Orca reference fixtures and timing gates before any renderer
+   behavior is considered shippable.
 
 Current implementation checkpoint:
 
