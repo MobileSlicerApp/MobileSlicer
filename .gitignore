@@ -54,7 +54,10 @@ __pycache__/
 # Local artifact holding areas
 /_quarantine/
 /artifacts/
-/tools/adb
+/tmp/
+/scanner-audits/
+/tools/
+/result.json
 *.apk
 *.gcode
 
