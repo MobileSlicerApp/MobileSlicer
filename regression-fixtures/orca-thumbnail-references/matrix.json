@@ -116,6 +116,24 @@
         "process_name": "0.20mm Standard @Creality K1 (0.4 nozzle)",
         "filament_name": "Creality Generic PLA @K1-all"
       }
+    },
+    {
+      "id": "prusa-mk4-simple-cube",
+      "model": "regression-fixtures/slicing/mobileslicer_test_cube.stl",
+      "reference_dir": "regression-fixtures/orca-thumbnail-references/prusa-mk4-simple-cube",
+      "bed": {
+        "width_mm": 250,
+        "depth_mm": 210,
+        "height_mm": 220
+      },
+      "profiles": {
+        "machine": "vendor/orcaslicer/resources/profiles/Prusa/machine/Prusa MK4 0.4 nozzle.json",
+        "process": "vendor/orcaslicer/resources/profiles/Prusa/process/0.20mm Standard @MK4.json",
+        "filament": "vendor/orcaslicer/resources/profiles/Prusa/filament/Prusa Generic PLA @MK4.json",
+        "printer_name": "Prusa MK4 0.4 nozzle",
+        "process_name": "0.20mm Standard @MK4",
+        "filament_name": "Prusa Generic PLA @MK4"
+      }
     }
   ]
 }

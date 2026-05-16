@@ -19,11 +19,14 @@ wiring. The current local/device gates prove:
 - Desktop-Orca thumbnail reference comparison exists and passes for the current
   matrix, including an active two-filament project fixture and a non-Qidi
   Creality fixture.
+- 3MF project preservation now has both local and Android-device proof for the
+  combined interaction fixture: multi-plate objects, filament assignments,
+  object settings, modifier settings, height ranges, project settings, and
+  project thumbnails survive one MobileSlicer import/export round trip.
 
 This is solid parity coverage for the current fixture matrix. It is not
-complete Orca parity. The next best work is project/workspace parity: preserve
-and round-trip richer 3MF project context, then finish modifier editing UX, then
-expand live host/printer coverage.
+complete Orca parity. The next best work is broadening printer and host
+compatibility evidence without weakening the existing project/workspace gates.
 
 ## Verified On 2026-05-15
 
@@ -56,6 +59,20 @@ The following gates were rerun during this audit:
 - `scripts/verify_android.sh multi-plate-sliced-3mf-metadata 100.123.18.83:42917`
 - `python3 -m unittest scripts/test_orca_metadata_audit.py scripts/test_orca_metadata_fixture_gate.py`
 - `git diff --check`
+
+The combined project preservation pass was completed later on the same branch
+after commit `8654d00a` (`Gate combined Orca project preservation fixture`):
+
+- `scripts/verify_android.sh orca-combined-project-roundtrip-device 100.123.18.83:36021`
+- `scripts/verify_android.sh orca-project-parity-device-matrix 100.123.18.83:36021`
+
+That device matrix passed the base active-multifilament project, rich object
+settings project, modifier project, height-range project, and combined
+interaction project round trips. The combined output kept two plates, object
+names, object-to-filament assignments, object settings, modifier settings,
+height-range settings, project config entries, source-file evidence, and
+project thumbnails. This closes the previous Android-device proof gap for the
+combined fixture.
 
 During the audit, `local` initially failed lint on suspicious indentation in
 `AutomationSliceRunner.kt`. That was fixed and `local` passed afterward.
@@ -107,7 +124,8 @@ compatible with current tolerances for:
 - perimeter/bridge/retraction fixtures,
 - arranged objects,
 - active two-filament/two-object project,
-- a Creality K1 profile case.
+- a Creality K1 profile case,
+- a Prusa MK4 profile case.
 
 This is a practical visual gate, not a claim that every pixel is identical to
 desktop Orca. If pixel-identical thumbnails become a requirement, the remaining
@@ -330,7 +348,9 @@ gated or source-supported, but not all are proven on real hosts:
 ### 4. Fixture Breadth
 
 The current thumbnail matrix is much better than before, but it is still a
-matrix. It should grow with real-world stress cases:
+matrix. It now includes Qidi-shaped generic cases plus real Creality K1 and
+Prusa MK4 profile cases. It should continue to grow with real-world stress
+cases:
 
 - larger meshes,
 - multiple active filaments with different object sizes,
@@ -341,8 +361,10 @@ matrix. It should grow with real-world stress cases:
   and CAD assemblies,
 - multi-plate projects imported from desktop Orca.
 
-Do this after project preservation work starts, otherwise the fixtures will
-only prove isolated export behavior.
+Do this incrementally and keep each new case tied to a real Orca profile or
+real host behavior. The current project preservation gates are strong enough
+that new thumbnail/profile fixtures no longer need to wait for more local 3MF
+project work.
 
 ### 5. Release Hygiene
 
@@ -387,16 +409,15 @@ expanding richer project coverage.
 
 ## Recommended Next Step
 
-Continue 3MF project preservation through the project parity matrix. The
-current pass records and gates project package evidence on import, preserves
-imported plate/config data in the native project writer, adds device-backed
-MobileSlicer round-trip audits, and covers rich multi-plate object settings,
-modifier volumes/settings, height ranges/settings, and a combined interaction
-fixture that exercises those schemas together.
-
-The matrix now rejects packages whose thumbnails do not cover every source
-plate instead of accepting one unrelated thumbnail somewhere in the ZIP. Sliced
-desktop fixtures also require `Metadata/plate_N.json` and
-`Metadata/plate_N.gcode` for every source plate. The next increment should keep
+Move the next parity work from local project structure to compatibility
+breadth. Keep `scripts/verify_android.sh orca-project-parity-matrix` and
 `scripts/verify_android.sh orca-project-parity-device-matrix <serial>` green
-whenever the 3MF import/export path changes.
+whenever the 3MF import/export path changes, but the highest-value uncovered
+work is now printer/host diversity:
+
+- keep adding real non-Qidi desktop Orca profile cases to the thumbnail
+  reference matrix,
+- run `scripts/run_orca_thumbnail_reference_matrix.sh <serial>` after each
+  matrix expansion,
+- validate Mainsail/Moonraker and OctoPrint thumbnail display against real or
+  containerized hosts before claiming those as proven live.

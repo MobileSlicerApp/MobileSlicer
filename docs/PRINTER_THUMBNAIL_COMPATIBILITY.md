@@ -27,7 +27,7 @@ python3 scripts/printer_thumbnail_compatibility_audit.py --pretty
 | BTT TFT thumbnails | gated | Android device fixture capture and the metadata benchmark require a `thumbnail_BTT` block with the requested dimensions. |
 | QOI G-code thumbnails | gated | Fixture/gate covers `thumbnail_QOI` and requires a real QOI payload signature. |
 | JPG G-code thumbnails | gated | Android real libslic3r links libjpeg-turbo, routes JPG/JPEG requests through Orca validation, and fixture/benchmark gates require a real JPEG payload in `thumbnail_JPG`. |
-| Bambu/Orca sliced 3MF package thumbnails | gated | `sliced-3mf-metadata` and desktop-Orca thumbnail reference matrix cover plate roles. |
+| Bambu/Orca sliced 3MF package thumbnails | gated | `sliced-3mf-metadata` and desktop-Orca thumbnail reference matrix cover plate roles, including real Creality K1 and Prusa MK4 profile cases. |
 | Multi-plate sliced 3MF package thumbnails | gated | `multi-plate-sliced-3mf-metadata` verifies `plate_1` and `plate_2` G-code, JSON, and role thumbnail package entries through Orca's generic sliced 3MF writer. |
 
 ## Rules
@@ -46,7 +46,7 @@ python3 scripts/printer_thumbnail_compatibility_audit.py --pretty
    metadata reports expected thumbnails.
 2. Test OctoPrint/plugin thumbnail display against a live or containerized
    host before moving it out of `pending_live_validation`.
-3. Promote the differentiated multi-plate package gate into the routine release
-   gate once its device runtime is acceptable. The current device gate already
-   verifies separate `plate_1` and `plate_2` G-code hashes, separate bbox JSON,
-   and role thumbnail package entries.
+3. Keep adding real desktop Orca profile cases to
+   `regression-fixtures/orca-thumbnail-references/matrix.json` when a printer
+   family has materially different bed dimensions, thumbnail defaults, or host
+   expectations.
