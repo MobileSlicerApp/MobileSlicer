@@ -123,6 +123,9 @@ Usage:
   scripts/verify_android.sh orca-height-range-project-fixture
   scripts/verify_android.sh orca-height-range-project-roundtrip-contract
   scripts/verify_android.sh orca-height-range-project-roundtrip-device [serial]
+  scripts/verify_android.sh orca-combined-project-fixture
+  scripts/verify_android.sh orca-combined-project-roundtrip-contract
+  scripts/verify_android.sh orca-combined-project-roundtrip-device [serial]
   scripts/verify_android.sh orca-step-sliced-source-fixture
   scripts/verify_android.sh orca-step-multi-plate-sliced-source-fixture
   scripts/verify_android.sh orca-project-parity-matrix
@@ -621,6 +624,8 @@ run_orca_project_parity_matrix_gate() {
   run_orca_modifier_project_roundtrip_contract_gate
   run_orca_height_range_project_fixture_gate
   run_orca_height_range_project_roundtrip_contract_gate
+  run_orca_combined_project_fixture_gate
+  run_orca_combined_project_roundtrip_contract_gate
   run_orca_step_sliced_source_fixture_gate
   run_orca_step_multi_plate_sliced_source_fixture_gate
 }
@@ -632,6 +637,7 @@ run_orca_project_parity_device_matrix_gate() {
   run_orca_rich_project_roundtrip_device_gate "$serial"
   run_orca_modifier_project_roundtrip_device_gate "$serial"
   run_orca_height_range_project_roundtrip_device_gate "$serial"
+  run_orca_combined_project_roundtrip_device_gate "$serial"
 }
 
 run_orca_height_range_project_fixture_gate() {
@@ -666,6 +672,49 @@ run_orca_height_range_project_roundtrip_contract_gate() {
     --require-object-names \
     --require-filament-assignments \
     --require-object-settings \
+    --require-layer-ranges \
+    --require-layer-range-settings \
+    --require-project-thumbnails \
+    --require-project-settings \
+    --pretty)
+}
+
+run_orca_combined_project_fixture_gate() {
+  log "Running combined Orca 3MF project fixture gate"
+  local fixture="$ROOT_DIR/regression-fixtures/orca-project-references/combined-project-preservation/combined-project-preservation.3mf"
+  [[ -f "$fixture" ]] || fail "Missing combined Orca project fixture: $fixture"
+  (cd "$ROOT_DIR" && python3 scripts/orca_3mf_project_preservation_audit.py \
+    --three-mf "$fixture" \
+    --min-plate-count 2 \
+    --min-object-count 2 \
+    --require-plate-names \
+    --require-object-names \
+    --require-filament-assignments \
+    --require-object-settings \
+    --require-modifier-volumes \
+    --require-modifier-settings \
+    --require-layer-ranges \
+    --require-layer-range-settings \
+    --require-project-thumbnails \
+    --require-project-settings \
+    --pretty)
+}
+
+run_orca_combined_project_roundtrip_contract_gate() {
+  log "Running combined Orca 3MF round-trip preservation contract gate"
+  local fixture="$ROOT_DIR/regression-fixtures/orca-project-references/combined-project-preservation/combined-project-preservation.3mf"
+  [[ -f "$fixture" ]] || fail "Missing combined Orca 3MF round-trip fixture: $fixture"
+  (cd "$ROOT_DIR" && python3 scripts/orca_3mf_project_preservation_audit.py \
+    --source-3mf "$fixture" \
+    --roundtrip-3mf "$fixture" \
+    --min-plate-count 2 \
+    --min-object-count 2 \
+    --require-plate-names \
+    --require-object-names \
+    --require-filament-assignments \
+    --require-object-settings \
+    --require-modifier-volumes \
+    --require-modifier-settings \
     --require-layer-ranges \
     --require-layer-range-settings \
     --require-project-thumbnails \
@@ -849,6 +898,21 @@ run_orca_height_range_project_roundtrip_device_gate() {
     2 \
     1 \
     0 \
+    1
+}
+
+run_orca_combined_project_roundtrip_device_gate() {
+  local serial="$1"
+  local fixture="$ROOT_DIR/regression-fixtures/orca-project-references/combined-project-preservation/combined-project-preservation.3mf"
+  run_orca_3mf_roundtrip_device_gate_for_fixture \
+    "$serial" \
+    "$fixture" \
+    "combined Orca 3MF round-trip source package" \
+    "orca-combined-project-roundtrip-device" \
+    2 \
+    2 \
+    1 \
+    1 \
     1
 }
 
@@ -4444,6 +4508,15 @@ case "$mode" in
   orca-height-range-project-roundtrip-device)
     run_orca_height_range_project_roundtrip_device_gate "$(device_serial "${2:-}")"
     ;;
+  orca-combined-project-fixture)
+    run_orca_combined_project_fixture_gate
+    ;;
+  orca-combined-project-roundtrip-contract)
+    run_orca_combined_project_roundtrip_contract_gate
+    ;;
+  orca-combined-project-roundtrip-device)
+    run_orca_combined_project_roundtrip_device_gate "$(device_serial "${2:-}")"
+    ;;
   orca-step-sliced-source-fixture)
     run_orca_step_sliced_source_fixture_gate
     ;;
@@ -4505,6 +4578,8 @@ case "$mode" in
     run_orca_modifier_project_roundtrip_contract_gate
     run_orca_height_range_project_fixture_gate
     run_orca_height_range_project_roundtrip_contract_gate
+    run_orca_combined_project_fixture_gate
+    run_orca_combined_project_roundtrip_contract_gate
     run_printer_thumbnail_compatibility_gate
     run_stub_inventory
     run_asset_generator_tests
