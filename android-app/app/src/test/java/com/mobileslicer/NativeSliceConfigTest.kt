@@ -730,7 +730,7 @@ class NativeSliceConfigTest {
 
         val result = JSONObject(
             applyPlateFilamentSlotsToNativeConfig(
-                configJson = """{"enable_prime_tower":true,"purge_in_prime_tower":false}""",
+                configJson = """{"enable_prime_tower":true,"purge_in_prime_tower":false,"mobile_slicer_printer_purge_in_prime_tower_enabled":true}""",
                 slots = slots,
                 plateObjects = plateObjects,
                 filaments = filaments,
@@ -755,6 +755,138 @@ class NativeSliceConfigTest {
                 "mobile_slicer_active_filament_slot_count" to 2
             )
         )
+    }
+
+    @Test
+    fun plateMultimaterialRestoresRequestedPrimeTowerAfterSingleMaterialBaseNormalization() {
+        val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(
+            id = "printer_multimaterial_process_tower",
+            purgeInPrimeTower = true
+        )
+        val filaments = (1..2).map { index ->
+            ProfileStoreRepository.fallbackFilamentProfile().copy(
+                id = "filament_multimaterial_process_tower_$index",
+                name = "ABS $index",
+                printerProfileId = printer.id,
+                materialType = "ABS",
+                defaultFilamentColor = if (index == 1) "#223344" else "#CC8833"
+            )
+        }
+        val process = newProcessProfileUnchecked(
+            0 to "process_multimaterial_process_tower",
+            1 to "0.20mm Process Tower",
+            188 to true,
+            189 to 60f,
+            259 to printer.id
+        )
+        val baseConfig = nativeConfigFor(printer, filaments.first(), process)
+        val baseJson = JSONObject(baseConfig)
+
+        assertFalse(baseJson.optBoolean("enable_prime_tower", true))
+        assertTrue(baseJson.optBoolean("mobile_slicer_process_prime_tower_enabled", false))
+
+        val result = JSONObject(
+            applyPlateFilamentSlotsToNativeConfig(
+                configJson = baseConfig,
+                slots = filaments.mapIndexed { index, filament -> filament.toPlateFilamentSlot(index + 1) },
+                plateObjects = listOf(
+                    testPlateObject(id = 1L, filamentSlotIndex = 1),
+                    testPlateObject(id = 2L, filamentSlotIndex = 2)
+                ),
+                filaments = filaments,
+                flushVolumes = null
+            )
+        )
+
+        assertTrue(result.optBoolean("enable_prime_tower", false))
+        assertTrue(result.optBoolean("purge_in_prime_tower", false))
+        assertEquals(2, result.optInt("mobile_slicer_active_filament_slot_count"))
+    }
+
+    @Test
+    fun plateMultimaterialKeepsProcessPrimeTowerDisabledAfterSingleMaterialBaseNormalization() {
+        val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(
+            id = "printer_multimaterial_process_tower_disabled",
+            purgeInPrimeTower = true
+        )
+        val filaments = (1..2).map { index ->
+            ProfileStoreRepository.fallbackFilamentProfile().copy(
+                id = "filament_multimaterial_process_tower_disabled_$index",
+                name = "ABS Disabled $index",
+                printerProfileId = printer.id,
+                materialType = "ABS",
+                defaultFilamentColor = if (index == 1) "#223344" else "#CC8833"
+            )
+        }
+        val process = newProcessProfileUnchecked(
+            0 to "process_multimaterial_process_tower_disabled",
+            1 to "0.20mm Process Tower Disabled",
+            188 to false,
+            189 to 60f,
+            259 to printer.id
+        )
+        val baseConfig = nativeConfigFor(printer, filaments.first(), process)
+        val baseJson = JSONObject(baseConfig)
+
+        assertFalse(baseJson.optBoolean("enable_prime_tower", true))
+        assertFalse(baseJson.optBoolean("mobile_slicer_process_prime_tower_enabled", true))
+
+        val result = JSONObject(
+            applyPlateFilamentSlotsToNativeConfig(
+                configJson = baseConfig,
+                slots = filaments.mapIndexed { index, filament -> filament.toPlateFilamentSlot(index + 1) },
+                plateObjects = listOf(
+                    testPlateObject(id = 1L, filamentSlotIndex = 1),
+                    testPlateObject(id = 2L, filamentSlotIndex = 2)
+                ),
+                filaments = filaments,
+                flushVolumes = null
+            )
+        )
+
+        assertFalse(result.optBoolean("enable_prime_tower", true))
+        assertFalse(result.optBoolean("purge_in_prime_tower", true))
+        assertEquals(2, result.optInt("mobile_slicer_active_filament_slot_count"))
+    }
+
+    @Test
+    fun plateMultimaterialKeepsPrinterPurgeIntoPrimeTowerDisabledWhenTowerIsEnabled() {
+        val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(
+            id = "printer_multimaterial_purge_disabled",
+            purgeInPrimeTower = false
+        )
+        val filaments = (1..2).map { index ->
+            ProfileStoreRepository.fallbackFilamentProfile().copy(
+                id = "filament_multimaterial_purge_disabled_$index",
+                name = "PLA Purge Disabled $index",
+                printerProfileId = printer.id,
+                materialType = "PLA"
+            )
+        }
+        val process = newProcessProfileUnchecked(
+            0 to "process_multimaterial_purge_disabled",
+            1 to "0.20mm Tower Enabled",
+            188 to true,
+            189 to 60f,
+            259 to printer.id
+        )
+
+        val result = JSONObject(
+            applyPlateFilamentSlotsToNativeConfig(
+                configJson = nativeConfigFor(printer, filaments.first(), process),
+                slots = filaments.mapIndexed { index, filament -> filament.toPlateFilamentSlot(index + 1) },
+                plateObjects = listOf(
+                    testPlateObject(id = 1L, filamentSlotIndex = 1),
+                    testPlateObject(id = 2L, filamentSlotIndex = 2)
+                ),
+                filaments = filaments,
+                flushVolumes = null
+            )
+        )
+
+        assertTrue(result.optBoolean("enable_prime_tower", false))
+        assertFalse(result.optBoolean("purge_in_prime_tower", true))
+        assertEquals(2, result.optInt("mobile_slicer_active_filament_slot_count"))
     }
 
     @Test
@@ -991,7 +1123,7 @@ class NativeSliceConfigTest {
 
         val result = JSONObject(
             applyPlateFilamentSlotsToNativeConfig(
-                configJson = """{"enable_prime_tower":true,"purge_in_prime_tower":false}""",
+                configJson = """{"enable_prime_tower":true,"purge_in_prime_tower":false,"mobile_slicer_printer_purge_in_prime_tower_enabled":true}""",
                 slots = slots,
                 plateObjects = plateObjects,
                 filaments = filaments,
@@ -1029,7 +1161,7 @@ class NativeSliceConfigTest {
 
         val result = JSONObject(
             applyPlateFilamentSlotsToNativeConfig(
-                configJson = """{"enable_prime_tower":true,"purge_in_prime_tower":false}""",
+                configJson = """{"enable_prime_tower":true,"purge_in_prime_tower":false,"mobile_slicer_printer_purge_in_prime_tower_enabled":true}""",
                 slots = slots,
                 plateObjects = plateObjects,
                 filaments = filaments,
@@ -1075,6 +1207,70 @@ class NativeSliceConfigTest {
         assertJsonArrayEquals(listOf(1, 2), result.getJSONArray("filament_self_index"))
         assertJsonArrayEquals(listOf(1, 2), result.getJSONArray("filament_map"))
         assertEquals("Auto For Flush", result.optString("filament_map_mode"))
+        assertFalse(result.optBoolean("single_extruder_multi_material", true))
+    }
+
+    @Test
+    fun multiNozzlePrinterDefaultsExposeOneMaterialSlotPerNozzle() {
+        val filament = ProfileStoreRepository.fallbackFilamentProfile().copy(
+            id = "filament_snapmaker_default",
+            name = "PLA",
+            defaultFilamentColor = "#8FC1FF"
+        )
+
+        val slots = defaultPlateFilamentSlotsForPrinter(
+            fallbackFilament = filament,
+            physicalNozzleCount = 4
+        )
+
+        assertEquals(listOf(1, 2, 3, 4), slots.map { it.index })
+        assertEquals(listOf(1, 2, 3, 4), slots.map { it.physicalNozzleIndex })
+        assertEquals(listOf("PLA N1", "PLA N2", "PLA N3", "PLA N4"), slots.map { it.label })
+    }
+
+    @Test
+    fun legacySingleMaterialSlotExpandsForMultiNozzlePrinter() {
+        val legacySlot = ProfileStoreRepository.fallbackFilamentProfile().copy(
+            id = "filament_legacy_snapmaker",
+            name = "PLA",
+            defaultFilamentColor = "#D3A46F"
+        ).toPlateFilamentSlot(index = 1)
+
+        val slots = expandLegacySingleSlotForMultiNozzlePrinter(
+            slots = listOf(legacySlot),
+            physicalNozzleCount = 4
+        )
+
+        assertEquals(listOf(1, 2, 3, 4), slots.map { it.index })
+        assertEquals(listOf(1, 2, 3, 4), slots.map { it.physicalNozzleIndex })
+        assertEquals("#D3A46F", slots.first().colorHex)
+    }
+
+    @Test
+    fun singleUsedSlotOnMultiNozzlePrinterStillRecordsPhysicalNozzleCountAndMap() {
+        val filament = ProfileStoreRepository.fallbackFilamentProfile().copy(
+            id = "filament_snapmaker_slot",
+            name = "Snapmaker PLA",
+            defaultFilamentColor = "#D3A46F"
+        )
+        val slots = listOf(
+            filament.toPlateFilamentSlot(index = 1).copy(physicalNozzleIndex = 3)
+        )
+
+        val result = JSONObject(
+            applyPlateFilamentSlotsToNativeConfig(
+                configJson = """{"nozzle_diameter":[0.4,0.4,0.4,0.4]}""",
+                slots = slots,
+                plateObjects = listOf(testPlateObject(id = 1L, filamentSlotIndex = 1)),
+                filaments = listOf(filament),
+                flushVolumes = null
+            )
+        )
+
+        assertEquals(1, result.optInt("mobile_slicer_active_filament_slot_count"))
+        assertEquals(4, result.optInt("mobile_slicer_physical_nozzle_count"))
+        assertJsonArrayEquals(listOf(3), result.getJSONArray("filament_map"))
+        assertEquals("Manual", result.optString("filament_map_mode"))
         assertFalse(result.optBoolean("single_extruder_multi_material", true))
     }
 
@@ -1200,7 +1396,7 @@ class NativeSliceConfigTest {
 
         val result = JSONObject(
             applyPlateFilamentSlotsToNativeConfig(
-                configJson = """{"enable_prime_tower":true,"purge_in_prime_tower":false}""",
+                configJson = """{"enable_prime_tower":true,"purge_in_prime_tower":false,"mobile_slicer_printer_purge_in_prime_tower_enabled":true}""",
                 slots = slots,
                 plateObjects = plateObjects,
                 filaments = filaments,

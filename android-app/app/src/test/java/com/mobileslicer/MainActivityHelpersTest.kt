@@ -3,6 +3,7 @@ package com.mobileslicer
 import com.mobileslicer.workspace.SliceResultSummary
 import com.mobileslicer.workspace.ImportedModelFormat
 import com.mobileslicer.workspace.PlateObject
+import com.mobileslicer.profiles.NativeConfigKeys
 import com.mobileslicer.viewer.ViewerModelTransform
 import java.io.File
 import java.nio.file.Files
@@ -99,6 +100,89 @@ class MainActivityHelpersTest {
                 fallbackName = "custom_shared_name.gcode"
             )
         )
+    }
+
+    @Test
+    fun generatedGcodeAuditFailsWhenMultiSlotConfigProducesSingleMaterialGcode() {
+        val gcodeFile = File.createTempFile("mobileslicer-single-material-", ".gcode").apply {
+            writeText(
+                """
+                ; filament_colour = #D3A46F
+                ; filament_map = 1
+                T0
+                G1 X10 Y10 E1
+                """.trimIndent()
+            )
+        }
+        try {
+            val audit = auditGeneratedGcodeMulticolor(
+                gcodeFile,
+                """{"${NativeConfigKeys.Mobile.ActiveFilamentSlotCount}":2}"""
+            )
+
+            assertTrue(audit.requiresMulticolorEvidence)
+            assertFalse(audit.hasMulticolorEvidence)
+            assertEquals(
+                "Expected 2 active filament slots, but generated G-code only contains single-material evidence.",
+                audit.failureReason
+            )
+        } finally {
+            gcodeFile.delete()
+        }
+    }
+
+    @Test
+    fun generatedGcodeAuditPassesWhenMultiSlotConfigProducesToolChanges() {
+        val gcodeFile = File.createTempFile("mobileslicer-multicolor-tools-", ".gcode").apply {
+            writeText(
+                """
+                ; filament_colour = #D3A46F;#F5F5F5
+                ; filament_map = 1,2
+                T0
+                G1 X10 Y10 E1
+                T1
+                G1 X20 Y20 E2
+                """.trimIndent()
+            )
+        }
+        try {
+            val audit = auditGeneratedGcodeMulticolor(
+                gcodeFile,
+                """{"${NativeConfigKeys.Mobile.ActiveFilamentSlotCount}":2}"""
+            )
+
+            assertTrue(audit.requiresMulticolorEvidence)
+            assertTrue(audit.hasMulticolorEvidence)
+            assertEquals(null, audit.failureReason)
+        } finally {
+            gcodeFile.delete()
+        }
+    }
+
+    @Test
+    fun generatedGcodeAuditDoesNotRequireMulticolorForSingleSlotConfig() {
+        val gcodeFile = File.createTempFile("mobileslicer-single-slot-", ".gcode").apply {
+            writeText(
+                """
+                ; filament_colour = #D3A46F
+                ; filament_map = 1
+                T0
+                G1 X10 Y10 E1
+                """.trimIndent()
+            )
+        }
+        try {
+            val audit = auditGeneratedGcodeMulticolor(
+                gcodeFile,
+                """{"${NativeConfigKeys.Mobile.ActiveFilamentSlotCount}":1}"""
+            )
+
+            assertFalse(audit.requiresMulticolorEvidence)
+            assertFalse(audit.hasMulticolorEvidence)
+            assertEquals(null, audit.failureReason)
+        } finally {
+            gcodeFile.delete()
+        }
     }
 
     @Test

@@ -605,19 +605,24 @@ extern "C" int orca_slice(OrcaEngine* engine)
 
         slice_stage = "config";
         const auto config_full_start = std::chrono::steady_clock::now();
-        Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
+        const bool using_imported_project_config = engine->impl.imported_project_config.has_value();
+        Slic3r::DynamicPrintConfig config = using_imported_project_config ?
+            *engine->impl.imported_project_config :
+            Slic3r::DynamicPrintConfig::full_print_config();
         const long config_full_ms = elapsed_ms_since(config_full_start);
         const auto config_seed_start = std::chrono::steady_clock::now();
         config.set_deserialize_strict("gcode_comments", "1");
-        config.set_deserialize_strict("start_gcode", "");
-        // Keep the shipping wrapper aligned with the bounded reference parity probe:
-        // FullPrintConfig::defaults() seeds a non-empty machine_start_gcode block,
-        // which otherwise injects setup-only commands like G28 / G1 Z5 into MobileSlicer output.
-        config.set_deserialize_strict("machine_start_gcode", "");
-        // The same seeded config base carries a non-empty machine_end_gcode block.
-        // Blank it here so the Android wrapper follows the parity probe's bounded
-        // neutralized end-command baseline instead of appending preset finalization.
-        config.set_deserialize_strict("machine_end_gcode", "");
+        if (!using_imported_project_config) {
+            config.set_deserialize_strict("start_gcode", "");
+            // Keep the shipping wrapper aligned with the bounded reference parity probe:
+            // FullPrintConfig::defaults() seeds a non-empty machine_start_gcode block,
+            // which otherwise injects setup-only commands like G28 / G1 Z5 into MobileSlicer output.
+            config.set_deserialize_strict("machine_start_gcode", "");
+            // The same seeded config base carries a non-empty machine_end_gcode block.
+            // Blank it here so the Android wrapper follows the parity probe's bounded
+            // neutralized end-command baseline instead of appending preset finalization.
+            config.set_deserialize_strict("machine_end_gcode", "");
+        }
         const long config_seed_ms = elapsed_ms_since(config_seed_start);
         const auto config_override_start = std::chrono::steady_clock::now();
         apply_json_overrides(engine->impl.config_json, config);

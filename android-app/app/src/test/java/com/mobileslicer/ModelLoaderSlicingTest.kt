@@ -7,6 +7,7 @@ import com.mobileslicer.viewer.PrinterBedSpec
 import com.mobileslicer.viewer.ViewerModelTransform
 import com.mobileslicer.workspace.ImportedModelFormat
 import com.mobileslicer.workspace.PlateObject
+import com.mobileslicer.workspace.PlateObjectGeometrySource
 import com.mobileslicer.workspace.PlateObjectModifierMesh
 import com.mobileslicer.workspace.PlateObjectProcessOverride
 import org.json.JSONObject
@@ -14,8 +15,118 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class ModelLoaderSlicingTest {
+    @Test
+    fun importedThreeMfProjectSlicePreservesNativeProjectMaterialsWhenUnedited() {
+        val projectFile = File.createTempFile("mobileslicer-project-", ".3mf")
+        projectFile.writeText("placeholder")
+        val objectOnPlate = plateObject(id = 7L).copy(
+            geometrySource = PlateObjectGeometrySource.ThreeMfMeshExtract(
+                originalPath = projectFile.absolutePath,
+                extractedStlPath = "/tmp/source-project-preview.stl"
+            )
+        )
+
+        try {
+            assertTrue(preservesImportedThreeMfProjectMaterials(listOf(objectOnPlate)))
+        } finally {
+            projectFile.delete()
+        }
+    }
+
+    @Test
+    fun importedThreeMfProjectSliceFallsBackWhenAppPaintChangesAssignments() {
+        val projectFile = File.createTempFile("mobileslicer-project-", ".3mf")
+        projectFile.writeText("placeholder")
+        val objectOnPlate = plateObject(id = 8L).copy(
+            geometrySource = PlateObjectGeometrySource.ThreeMfMeshExtract(
+                originalPath = projectFile.absolutePath,
+                extractedStlPath = "/tmp/source-project-preview.stl"
+            ),
+            modifiers = listOf(
+                PlateObjectModifierMesh(
+                    id = 1L,
+                    label = "Modifier",
+                    filePath = "/tmp/modifier.stl",
+                    enabled = true
+                )
+            )
+        )
+
+        try {
+            assertFalse(preservesImportedThreeMfProjectMaterials(listOf(objectOnPlate)))
+        } finally {
+            projectFile.delete()
+        }
+    }
+
+    @Test
+    fun stlImportDoesNotPreserveHiddenProjectMaterials() {
+        assertFalse(preservesImportedThreeMfProjectMaterials(listOf(plateObject(id = 9L))))
+    }
+
+    @Test
+    fun strictSliceProfileIssueBlocksMissingProcessInsteadOfUsingFallback() {
+        val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(id = "printer_strict")
+        val filament = ProfileStoreRepository.fallbackFilamentProfile().copy(
+            id = "filament_strict",
+            printerProfileId = printer.id
+        )
+        val selectedProcess = newProcessProfileUnchecked(
+            0 to "process_missing",
+            1 to "Missing Process",
+            259 to printer.id
+        )
+        val issue = strictSliceProfileIssue(
+            configuration = com.mobileslicer.profiles.ActiveSlicerConfiguration(
+                printer = printer,
+                filament = filament,
+                process = selectedProcess
+            ),
+            printer = printer,
+            processProfiles = emptyList(),
+            profileFilaments = listOf(filament),
+            activePlateSlots = listOf(filament.toPlateFilamentSlot(index = 1))
+        )
+
+        assertEquals(
+            "Selected process profile is missing for ${printer.name}. Re-select or import the correct process in Profiles before slicing.",
+            issue
+        )
+    }
+
+    @Test
+    fun strictSliceProfileIssueBlocksMaterialSlotsWithoutProfileBacking() {
+        val printer = ProfileStoreRepository.fallbackPrinterProfile().copy(id = "printer_strict_material")
+        val filament = ProfileStoreRepository.fallbackFilamentProfile().copy(
+            id = "filament_other_printer",
+            printerProfileId = "other_printer"
+        )
+        val process = newProcessProfileUnchecked(
+            0 to "process_strict",
+            1 to "Strict Process",
+            259 to printer.id
+        )
+        val issue = strictSliceProfileIssue(
+            configuration = com.mobileslicer.profiles.ActiveSlicerConfiguration(
+                printer = printer,
+                filament = filament,
+                process = process
+            ),
+            printer = printer,
+            processProfiles = listOf(process),
+            profileFilaments = listOf(filament),
+            activePlateSlots = listOf(filament.toPlateFilamentSlot(index = 1))
+        )
+
+        assertEquals(
+            "Material slot 1 is not backed by a filament profile for ${printer.name}. Re-select or import the filament in Profiles before slicing.",
+            issue
+        )
+    }
+
     @Test
     fun objectProcessOverridesAreInjectedIntoNativeConfigByPlateObjectIndex() {
         val process = newProcessProfileUnchecked(

@@ -267,6 +267,7 @@ internal fun JSONObject.putNativeProcessConfiguration(process: ProcessProfile): 
             .put("ironing_angle", process.ironingAngleDegrees.toDouble())
             .put("ironing_angle_fixed", process.ironingAngleFixed)
             .put("ironing_speed", process.ironingSpeedMmPerSec.toDouble())
+            .put(NativeConfigKeys.Mobile.ProcessPrimeTowerEnabled, process.enablePrimeTower)
             .put(NativeConfigKeys.PrimeTower.Enable, process.enablePrimeTower)
             .put("prime_tower_width", process.primeTowerWidthMm.toDouble())
             .put(NativeConfigKeys.Process.WipeTowerX, process.wipeTowerXmm.toDouble())

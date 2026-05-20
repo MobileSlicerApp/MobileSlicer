@@ -15,6 +15,12 @@ extern "C" int orca_plan_plate_arrangement(OrcaEngine* engine, const char* const
         Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
         apply_android_runtime_gcode_baseline(config);
         apply_json_overrides(config_json != nullptr ? std::string(config_json) : engine->impl.config_json, config);
+        // Orca's arrange shared-bed path intersects every extruder_printable_area and
+        // assumes a non-empty result. Snapmaker U1 profiles can carry per-tool areas
+        // that make that helper dereference an empty intersection on Android. Plate
+        // arrangement only needs the physical bed footprint; slicing still keeps the
+        // full printer config.
+        config.set_key_value("extruder_printable_area", new Slic3r::ConfigOptionPointsGroups());
         const auto config_finished_at = std::chrono::steady_clock::now();
 
         const auto load_started_at = std::chrono::steady_clock::now();

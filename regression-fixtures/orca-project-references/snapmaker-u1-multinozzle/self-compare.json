@@ -1,0 +1,24 @@
+{
+  "mobile": {
+    "filament_colour": "#F2754E;#4EA3F2",
+    "filament_colour_count": 2,
+    "filament_map": "1,2",
+    "has_toolchange": true,
+    "tool_count": 2,
+    "tool_ids": [
+      0,
+      1
+    ]
+  },
+  "reference": {
+    "filament_colour": "#F2754E;#4EA3F2",
+    "filament_colour_count": 2,
+    "filament_map": "1,2",
+    "has_toolchange": true,
+    "tool_count": 2,
+    "tool_ids": [
+      0,
+      1
+    ]
+  }
+}

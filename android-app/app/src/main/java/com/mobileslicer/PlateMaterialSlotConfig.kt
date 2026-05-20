@@ -3,6 +3,7 @@ package com.mobileslicer
 import android.content.Context
 import com.mobileslicer.profiles.FilamentProfile
 import com.mobileslicer.profiles.NativeConfigKeys
+import com.mobileslicer.profiles.PrinterProfile
 import com.mobileslicer.profiles.applySingleFilamentSlotNativeRuntimeBoundary
 import com.mobileslicer.profiles.normalizeNativeShellThicknessScalars
 import com.mobileslicer.workspace.PlateFilamentSlot
@@ -21,6 +22,76 @@ internal fun FilamentProfile.toPlateFilamentSlot(index: Int): PlateFilamentSlot 
         materialType = materialType,
         colorHex = defaultFilamentColor.ifBlank { "#8FC1FF" }
     )
+
+private val DefaultNozzleSlotColors = listOf(
+    "#D3A46F",
+    "#F5F5F5",
+    "#2E3135",
+    "#C43D32",
+    "#2F7DD1",
+    "#2E9D62",
+    "#7D4FD3",
+    "#F0B429"
+)
+
+internal fun defaultPlateFilamentSlotsForPrinter(
+    fallbackFilament: FilamentProfile,
+    physicalNozzleCount: Int
+): List<PlateFilamentSlot> {
+    val slotCount = physicalNozzleCount.coerceAtLeast(1)
+    return List(slotCount) { offset ->
+        val index = offset + 1
+        fallbackFilament.toPlateFilamentSlot(index = index).copy(
+            label = if (slotCount > 1) "${fallbackFilament.name} N$index" else fallbackFilament.name,
+            colorHex = if (slotCount > 1) {
+                DefaultNozzleSlotColors.getOrElse(offset) { fallbackFilament.defaultFilamentColor.ifBlank { "#8FC1FF" } }
+            } else {
+                fallbackFilament.defaultFilamentColor.ifBlank { "#8FC1FF" }
+            },
+            physicalNozzleIndex = if (slotCount > 1) index else null
+        )
+    }
+}
+
+internal fun expandLegacySingleSlotForMultiNozzlePrinter(
+    slots: List<PlateFilamentSlot>,
+    physicalNozzleCount: Int
+): List<PlateFilamentSlot> {
+    if (physicalNozzleCount <= 1) return slots
+    if (slots.size != 1) return slots
+    val base = slots.single()
+    if (base.physicalNozzleIndex != null) return slots
+    return List(physicalNozzleCount) { offset ->
+        val index = offset + 1
+        base.copy(
+            index = index,
+            label = if (index == 1) base.label else "${base.label.substringBefore(" N")} N$index",
+            colorHex = if (index == 1) {
+                base.colorHex.ifBlank { DefaultNozzleSlotColors.first() }
+            } else {
+                DefaultNozzleSlotColors.getOrElse(offset) { base.colorHex.ifBlank { "#8FC1FF" } }
+            },
+            physicalNozzleIndex = index
+        )
+    }
+}
+
+internal fun PrinterProfile.materialSlotPhysicalNozzleCount(): Int {
+    fun parseNozzleValue(value: Any?): Int = when (value) {
+        is JSONArray -> value.length()
+        is String -> value.split(',', ';').map { it.trim() }.count { it.isNotBlank() }
+        else -> 0
+    }
+    val resolvedCount = runCatching {
+        JSONObject(orcaResolvedMachineJson).opt(NativeConfigKeys.Printer.NozzleDiameter)
+    }.getOrNull().let(::parseNozzleValue)
+    if (resolvedCount > 0) return resolvedCount
+    val modelCount = runCatching {
+        JSONObject(orcaMachineModelJson).opt(NativeConfigKeys.Printer.NozzleDiameter)
+    }.getOrNull().let(::parseNozzleValue)
+    if (modelCount > 0) return modelCount
+    return extrudersCount.toIntOrNull()?.takeIf { it > 0 } ?: 1
+}
 
 internal fun syncPlateFilamentSlotsWithProfiles(
     slots: List<PlateFilamentSlot>,
@@ -255,6 +326,12 @@ internal fun applyPlateFilamentSlotsToNativeConfigResult(
         })
         json.put("flush_volumes_vector", "140,140")
         json.applySingleFilamentSlotNativeRuntimeBoundary()
+        json.put("mobile_slicer_physical_nozzle_count", physicalNozzleCount)
+        json.put(NativeConfigKeys.Filament.Map, JSONArray().put(slot.physicalNozzleIndex?.coerceIn(1, physicalNozzleCount) ?: 1))
+        json.put(
+            NativeConfigKeys.Filament.MapMode,
+            if (slot.physicalNozzleIndex != null) "Manual" else "Auto For Flush"
+        )
         json.normalizeNativeShellThicknessScalars()
         val result = json.toString()
         PlateSliceConfigCache.put(cacheKey, result)
@@ -315,10 +392,11 @@ internal fun applyPlateFilamentSlotsToNativeConfigResult(
         }
     }
 
-    val requestedPrimeTower = json.optBoolean(NativeConfigKeys.PrimeTower.Enable, false)
+    val processPrimeTowerIntent = json.processPrimeTowerIntent()
+    val printerPurgeInPrimeTowerIntent = json.printerPurgeInPrimeTowerIntent()
     val actuallyUsedSlotIndexes = actuallyUsedPlateFilamentSlotIndexes(sortedSlots, plateObjects)
     val multiMaterialPlate = actuallyUsedSlotIndexes.size > 1
-    val primeTowerEnabled = multiMaterialPlate && requestedPrimeTower
+    val primeTowerEnabled = multiMaterialPlate && processPrimeTowerIntent
     json.applyPaintAwareConfigValidation(
         plateObjects = plateObjects,
         activeSlots = sortedSlots
@@ -326,7 +404,7 @@ internal fun applyPlateFilamentSlotsToNativeConfigResult(
     json.put(NativeConfigKeys.PrimeTower.SingleExtruderMultiMaterial, singlePhysicalNozzle)
     json.put(NativeConfigKeys.PrimeTower.SingleExtruderMultiMaterialPriming, false)
     json.put(NativeConfigKeys.PrimeTower.Enable, primeTowerEnabled)
-    json.put(NativeConfigKeys.PrimeTower.Purge, primeTowerEnabled)
+    json.put(NativeConfigKeys.PrimeTower.Purge, primeTowerEnabled && printerPurgeInPrimeTowerIntent)
     json.put(NativeConfigKeys.Mobile.ActiveFilamentSlotCount, sortedSlots.size)
     json.put("mobile_slicer_physical_nozzle_count", physicalNozzleCount)
     json.put(NativeConfigKeys.Filament.Map, JSONArray().apply {
@@ -576,6 +654,19 @@ private fun JSONObject.applyPaintAwareConfigValidation(
     }
 }
 
+private fun JSONObject.processPrimeTowerIntent(): Boolean =
+    optBooleanOrNull(NativeConfigKeys.Mobile.ProcessPrimeTowerEnabled)
+        ?: optBooleanOrNull("mobile_slicer_requested_prime_tower")
+        ?: optBoolean(NativeConfigKeys.PrimeTower.Enable, false)
+
+private fun JSONObject.printerPurgeInPrimeTowerIntent(): Boolean =
+    optBooleanOrNull(NativeConfigKeys.Mobile.PrinterPurgeInPrimeTowerEnabled)
+        ?: optBooleanOrNull("mobile_slicer_requested_purge_in_prime_tower")
+        ?: optBoolean(NativeConfigKeys.PrimeTower.Purge, true)
+
+private fun JSONObject.optBooleanOrNull(key: String): Boolean? =
+    if (has(key) && !isNull(key)) optBoolean(key) else null
+
 private fun supportTypeForPaintedSupport(currentSupportType: String): String =
     when (currentSupportType) {
         "tree(auto)",
@@ -724,7 +815,8 @@ internal fun loadPrinterMaterialSlotState(
     context: Context,
     printerId: String,
     availableFilaments: List<FilamentProfile>,
-    fallbackFilament: FilamentProfile
+    fallbackFilament: FilamentProfile,
+    physicalNozzleCount: Int = 1
 ): PrinterMaterialSlotState {
     val stored = context.getSharedPreferences(PrinterMaterialSlotsPreferences, Context.MODE_PRIVATE)
         .getString("slots_$printerId", null)
@@ -770,8 +862,16 @@ internal fun loadPrinterMaterialSlotState(
         }
     }.getOrDefault(PrinterMaterialSlotState(emptyList(), null))
 
-    val slots = loadedState.slots
-        .ifEmpty { listOf(fallbackFilament.toPlateFilamentSlot(index = 1)) }
+    val slots = expandLegacySingleSlotForMultiNozzlePrinter(
+        slots = loadedState.slots
+        .ifEmpty {
+            defaultPlateFilamentSlotsForPrinter(
+                fallbackFilament = fallbackFilament,
+                physicalNozzleCount = physicalNozzleCount
+            )
+        },
+        physicalNozzleCount = physicalNozzleCount
+    )
         .sortedBy { it.index }
         .mapIndexed { index, slot -> slot.copy(index = index + 1) }
     return PrinterMaterialSlotState(

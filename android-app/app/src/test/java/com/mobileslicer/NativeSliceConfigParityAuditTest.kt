@@ -574,6 +574,8 @@ class NativeSliceConfigParityAuditTest {
         "machine_switch_extruder_time",
         "machine_tech",
         "max_height_mm",
+        "mobile_slicer_process_prime_tower_enabled",
+        "mobile_slicer_printer_purge_in_prime_tower_enabled",
         "multi_zone",
         "multi_zone_number",
         "pause_gcode",

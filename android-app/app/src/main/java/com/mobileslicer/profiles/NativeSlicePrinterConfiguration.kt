@@ -150,6 +150,7 @@ internal fun JSONObject.putNativePrinterConfiguration(printer: PrinterProfile): 
             .put("manual_filament_change", printer.manualFilamentChange)
             .put("bed_temperature_formula", printer.bedTemperatureFormula.configValue)
             .put(NativeConfigKeys.Process.WipeTowerType, printer.wipeTowerType.configValue)
+            .put(NativeConfigKeys.Mobile.PrinterPurgeInPrimeTowerEnabled, printer.purgeInPrimeTower)
             .put(NativeConfigKeys.PrimeTower.Purge, printer.purgeInPrimeTower)
             .put("enable_filament_ramming", printer.enableFilamentRamming)
             .put("cooling_tube_retraction", printer.coolingTubeRetractionMm.toDouble())

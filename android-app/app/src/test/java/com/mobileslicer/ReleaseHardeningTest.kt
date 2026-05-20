@@ -152,6 +152,7 @@ class ReleaseHardeningTest {
             .substringBefore("extern \"C\" int orca_plan_auto_orientation")
         assertTrue(arrangeFunction.contains("params.parallel = true;"))
         assertFalse(arrangeFunction.contains("params.parallel = false;"))
+        assertTrue(arrangeFunction.contains("""config.set_key_value("extruder_printable_area", new Slic3r::ConfigOptionPointsGroups());"""))
         assertTrue(arrangeFunction.contains("Slic3r::arrangement::arrange(items, excludes, bed_points, params);"))
         assertTrue(arrangeFunction.contains("<< \" parallel=\" << (params.parallel ? 1 : 0)"))
     }

@@ -371,8 +371,9 @@ internal fun CompactWorkspaceBadge(
 }
 
 internal fun ProfileStore.profileRequirementMessage(): String? {
-    val missingPrinter = printers.isEmpty()
-    val missingFilament = filaments.isEmpty()
+    val missingPrinter = selectedPrinterId.isBlank() || printers.none { it.id == selectedPrinterId }
+    val missingFilament = selectedFilamentId.isBlank() ||
+        filaments.none { it.id == selectedFilamentId && it.printerProfileId == selectedPrinterId }
     val missingProcess = selectedProcessId.isBlank() ||
         processes.none { it.id == selectedProcessId && it.printerProfileId == selectedPrinterId }
     return when {

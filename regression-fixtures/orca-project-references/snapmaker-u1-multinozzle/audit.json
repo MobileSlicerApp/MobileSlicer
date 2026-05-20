@@ -1,0 +1,97 @@
+{
+  "failures": [],
+  "metadata": {
+    "config_entries": [
+      "Metadata/model_settings.config",
+      "Metadata/project_settings.config",
+      "Metadata/slice_info.config"
+    ],
+    "entries": [
+      "[Content_Types].xml",
+      "Metadata/plate_1.png",
+      "Metadata/plate_1_small.png",
+      "Metadata/plate_no_light_1.png",
+      "Metadata/top_1.png",
+      "Metadata/pick_1.png",
+      "Metadata/plate_1.json",
+      "3D/3dmodel.model",
+      "3D/_rels/3dmodel.model.rels",
+      "3D/Objects/u1_red_cube_1_1.model",
+      "3D/Objects/u1_blue_cube_1_2.model",
+      "Metadata/project_settings.config",
+      "Metadata/plate_1.gcode.md5",
+      "Metadata/plate_1.gcode",
+      "Metadata/_rels/model_settings.config.rels",
+      "Metadata/model_settings.config",
+      "Metadata/slice_info.config",
+      "_rels/.rels"
+    ],
+    "entry_count": 18,
+    "filament_count": 2,
+    "layer_range_evidence": [],
+    "modifier_evidence": [],
+    "object_count": 2,
+    "object_filament_assignments": [
+      {
+        "filament_index": 1,
+        "object_name": "u1_red_cube_1"
+      },
+      {
+        "filament_index": 2,
+        "object_name": "u1_blue_cube_1"
+      }
+    ],
+    "object_names": [
+      "u1_red_cube_1",
+      "u1_blue_cube_1"
+    ],
+    "object_setting_evidence": [],
+    "path": "regression-fixtures/orca-project-references/snapmaker-u1-multinozzle/snapmaker-u1-multinozzle.gcode.3mf",
+    "plate_count": 1,
+    "plate_json_entries": [
+      "Metadata/plate_1.json"
+    ],
+    "plate_json_indices": [
+      1
+    ],
+    "plate_names": [
+      "Snapmaker U1 multi-nozzle"
+    ],
+    "preserved_features": [
+      "mesh_geometry",
+      "source_file_evidence",
+      "object_names",
+      "object_filament_assignments",
+      "plate_metadata",
+      "filament_metadata",
+      "project_thumbnails",
+      "plate_json_metadata",
+      "sliced_plate_gcode_entries",
+      "project_settings",
+      "model_settings",
+      "slice_info"
+    ],
+    "sliced_plate_gcode_entries": [
+      "Metadata/plate_1.gcode"
+    ],
+    "sliced_plate_gcode_indices": [
+      1
+    ],
+    "source_file_evidence": [
+      "u1_blue_cube.stl",
+      "u1_red_cube.stl"
+    ],
+    "step_source_object_count": 0,
+    "thumbnail_entries": [
+      "Metadata/pick_1.png",
+      "Metadata/plate_1.png",
+      "Metadata/plate_1_small.png",
+      "Metadata/plate_no_light_1.png",
+      "Metadata/top_1.png"
+    ],
+    "thumbnail_plate_indices": [
+      1
+    ]
+  },
+  "ok": true
+}

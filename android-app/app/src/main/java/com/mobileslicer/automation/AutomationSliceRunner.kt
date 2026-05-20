@@ -376,6 +376,7 @@ internal class AutomationSliceRunner(
         } else {
             preparedModel
         }
+        val preservesImportedThreeMf = preserveProjectObjects && sourceFormat == SourceModelFileFormat.ThreeMf
         val configJson = runCatching { resolveConfigJson(request.intent) }.getOrElse { exception ->
             Log.e(TAG, "automation:failed config resolution", exception)
             writeStatus("failed: config resolution ${exception.javaClass.simpleName}: ${exception.message.orEmpty()}")
@@ -435,15 +436,23 @@ internal class AutomationSliceRunner(
             mobileObjectIds = longArrayOf(1L)
         }
         val nativeLoadStartedAt = SystemClock.elapsedRealtime()
-        val loadResult = NativeEngineCalls.loadPlateModelsV2(
-            handle = engineHandle,
-            paths = loadPaths,
-            sourcePaths = sourcePaths,
-            transforms = loadTransforms,
-            extruderIds = extruderIds,
-            mobileObjectIds = mobileObjectIds,
-            paintPayloadJson = ""
-        )
+        val loadResult = if (preservesImportedThreeMf && !twoFilamentObjects) {
+            NativeEngineCalls.loadProject3mf(
+                handle = engineHandle,
+                path = stagedModel.absolutePath,
+                mobileObjectIds = mobileObjectIds
+            )
+        } else {
+            NativeEngineCalls.loadPlateModelsV2(
+                handle = engineHandle,
+                paths = loadPaths,
+                sourcePaths = sourcePaths,
+                transforms = loadTransforms,
+                extruderIds = extruderIds,
+                mobileObjectIds = mobileObjectIds,
+                paintPayloadJson = ""
+            )
+        }
         if (loadResult !is NativeEngineCallResult.Success) {
             NativeEngineCalls.clearGeneratedGcode(engineHandle)
             writeStatus("failed: ${loadResult.statusMessage} path=${request.modelPath} staged=${preparedModel.absolutePath} loaded=${modelToLoad.absolutePath}")

@@ -13,6 +13,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 internal const val MaxSoftwareThumbnailTriangles = 180_000
+internal const val MaxOffscreenEglThumbnailTriangles = 180_000
 
 internal data class SliceThumbnailRgba(
     val width: Int,
@@ -88,13 +89,14 @@ internal fun renderSliceThumbnails(
             skippedReason = "no mesh available"
         )
     }
+    val renderSources = thumbnailSourcesForRenderer(renderer, sources)
 
     try {
         val renderRequests = requests.distinctBy { it.width to it.height }
         val gcodeThumbnails = renderGcodeThumbnails(
             requests = renderRequests,
             renderer = renderer,
-            sources = sources,
+            sources = renderSources,
             printerBed = printerBed
         )
         val packageRequest = if (includePackageThumbnails) {
@@ -112,7 +114,7 @@ internal fun renderSliceThumbnails(
                 renderer.render(
                     request = request,
                     role = role,
-                    sources = sources,
+                    sources = renderSources,
                     printerBed = printerBed
                 )
             }
@@ -123,6 +125,13 @@ internal fun renderSliceThumbnails(
             thumbnails = rendered,
             includePackageThumbnails = includePackageThumbnails,
             skippedReason = if (rendered.isEmpty()) "all thumbnail requests were invalid" else null
+        )
+    } catch (error: OutOfMemoryError) {
+        return SliceThumbnailRenderResult(
+            requests = requests,
+            thumbnails = emptyList(),
+            includePackageThumbnails = includePackageThumbnails,
+            skippedReason = "thumbnail render skipped after memory pressure"
         )
     } finally {
         (renderer as? AutoCloseable)?.close()
@@ -198,6 +207,70 @@ internal data class ThumbnailSource(
     val transform: ViewerModelTransform,
     val color: Int?
 )
+
+internal fun thumbnailSourcesForRenderer(
+    renderer: SliceThumbnailRendererBackend,
+    sources: List<ThumbnailSource>
+): List<ThumbnailSource> {
+    if (renderer !is OffscreenEglSliceThumbnailRenderer) return sources
+    return fitThumbnailSourcesToTriangleBudget(
+        sources = sources,
+        maxTotalTriangles = MaxOffscreenEglThumbnailTriangles
+    )
+}
+
+internal fun fitThumbnailSourcesToTriangleBudget(
+    sources: List<ThumbnailSource>,
+    maxTotalTriangles: Int
+): List<ThumbnailSource> {
+    val totalTriangles = sources.sumOf { it.mesh.triangleCount }
+    if (sources.isEmpty() || totalTriangles <= maxTotalTriangles || maxTotalTriangles <= 0) {
+        return sources
+    }
+    return sources.map { source ->
+        val sourceBudget = max(
+            1,
+            floor(source.mesh.triangleCount.toDouble() * maxTotalTriangles.toDouble() / totalTriangles.toDouble()).toInt()
+        )
+        source.copy(mesh = source.mesh.sampledForThumbnailTriangleBudget(sourceBudget))
+    }
+}
+
+internal fun StlMesh.sampledForThumbnailTriangleBudget(maxTriangles: Int): StlMesh {
+    if (triangleCount <= maxTriangles || maxTriangles <= 0) return this
+    val stride = ceil(triangleCount.toDouble() / maxTriangles.toDouble()).toInt().coerceAtLeast(1)
+    val selectedTriangleCount = ceil(triangleCount.toDouble() / stride.toDouble())
+        .toInt()
+        .coerceAtMost(maxTriangles)
+        .coerceAtLeast(1)
+    val sampledVertices = FloatArray(selectedTriangleCount * 9)
+    val sampledNormals = FloatArray(selectedTriangleCount * 9)
+    var targetOffset = 0
+    var writtenTriangles = 0
+    var triangleIndex = 0
+    while (triangleIndex < triangleCount && writtenTriangles < selectedTriangleCount) {
+        repeat(3) { corner ->
+            val vertexIndex = indices?.getOrNull(triangleIndex * 3 + corner) ?: (triangleIndex * 3 + corner)
+            val sourceOffset = vertexIndex * 3
+            sampledVertices[targetOffset] = vertices.getOrElse(sourceOffset) { 0f }
+            sampledVertices[targetOffset + 1] = vertices.getOrElse(sourceOffset + 1) { 0f }
+            sampledVertices[targetOffset + 2] = vertices.getOrElse(sourceOffset + 2) { 0f }
+            sampledNormals[targetOffset] = normals.getOrElse(sourceOffset) { 0f }
+            sampledNormals[targetOffset + 1] = normals.getOrElse(sourceOffset + 1) { 0f }
+            sampledNormals[targetOffset + 2] = normals.getOrElse(sourceOffset + 2) { 1f }
+            targetOffset += 3
+        }
+        writtenTriangles++
+        triangleIndex += stride
+    }
+    return copy(
+        vertices = sampledVertices,
+        normals = sampledNormals,
+        triangleCount = writtenTriangles,
+        indices = null,
+        flatShaded = true
+    )
+}
 
 internal enum class ThumbnailRenderRole(val wireName: String) {
     Gcode("gcode"),

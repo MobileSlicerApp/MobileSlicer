@@ -186,6 +186,51 @@ private data class NativePlateLoadRequest(
     val signature: String
 )
 
+private data class NativeProjectSliceRequest(
+    val path: String,
+    val mobileObjectIds: LongArray,
+    val signature: String
+)
+
+internal data class GeneratedGcodeMulticolorAudit(
+    val expectedActiveSlots: Int,
+    val toolIds: Set<Int>,
+    val filamentColorCount: Int,
+    val filamentMapCount: Int,
+    val m620Count: Int,
+    val m621Count: Int,
+    val hasMulticolorEvidence: Boolean
+) {
+    val requiresMulticolorEvidence: Boolean
+        get() = expectedActiveSlots > 1
+
+    val failureReason: String?
+        get() = if (requiresMulticolorEvidence && !hasMulticolorEvidence) {
+            "Expected $expectedActiveSlots active filament slots, but generated G-code only contains single-material evidence."
+        } else {
+            null
+        }
+
+    fun logSummary(): String =
+        "expectedActiveSlots=$expectedActiveSlots " +
+            "toolIds=${toolIds.sorted().joinToString(",", prefix = "[", postfix = "]")} " +
+            "filamentColorCount=$filamentColorCount filamentMapCount=$filamentMapCount " +
+            "M620=$m620Count M621=$m621Count hasMulticolorEvidence=$hasMulticolorEvidence"
+}
+
+private fun nativeProjectSliceRequest(plateObjects: List<PlateObject>): NativeProjectSliceRequest? {
+    if (!preservesImportedThreeMfProjectMaterials(plateObjects)) return null
+    val objectOnPlate = plateObjects.single()
+    val source = objectOnPlate.geometrySource as? PlateObjectGeometrySource.ThreeMfMeshExtract ?: return null
+    val projectFile = File(source.originalPath).takeIf { it.isFile && it.length() > 0L } ?: return null
+    val signature = "project3mf:${projectFile.absolutePath}:${projectFile.length()}:${projectFile.lastModified()}:id=${objectOnPlate.id}"
+    return NativeProjectSliceRequest(
+        path = projectFile.absolutePath,
+        mobileObjectIds = longArrayOf(objectOnPlate.id),
+        signature = signature
+    )
+}
+
 private fun nativePlateLoadRequest(
     plateObjects: List<PlateObject>,
     printerBed: PrinterBedSpec
@@ -225,6 +270,59 @@ private fun nativePlateLoadRequest(
         "$index:id=${objectOnPlate.id}:${objectOnPlate.nativeSourceKey}:slot=$originalSlot:paint=$paintHash:${objectOnPlate.transform}"
     }.joinToString("|")
     return NativePlateLoadRequest(paths, sourcePaths, transforms, extruderIds, mobileObjectIds, paintPayloadJson, signature)
+}
+
+internal fun auditGeneratedGcodeMulticolor(gcodeFile: File, configJson: String): GeneratedGcodeMulticolorAudit {
+    val expectedActiveSlots = runCatching {
+        org.json.JSONObject(configJson).optInt(NativeConfigKeys.Mobile.ActiveFilamentSlotCount, 1)
+    }.getOrDefault(1).coerceAtLeast(1)
+    val toolIds = linkedSetOf<Int>()
+    var filamentColorCount = 0
+    var filamentMapCount = 0
+    var m620Count = 0
+    var m621Count = 0
+
+    fun listCount(value: String): Int =
+        value.split(';', ',')
+            .map { it.trim() }
+            .count { it.isNotBlank() }
+
+    gcodeFile.bufferedReader().useLines { lines ->
+        lines.forEach { rawLine ->
+            val line = rawLine.trim()
+            if (line.length > 1 && line[0] == 'T' && line[1].isDigit()) {
+                line.drop(1)
+                    .takeWhile { it.isDigit() }
+                    .toIntOrNull()
+                    ?.let { toolIds.add(it) }
+            }
+            if (line.startsWith("M620")) m620Count++
+            if (line.startsWith("M621")) m621Count++
+            if (line.startsWith(";") && '=' in line) {
+                val body = line.drop(1)
+                val key = body.substringBefore('=').trim()
+                val value = body.substringAfter('=').trim()
+                when (key) {
+                    "filament_colour" -> filamentColorCount = maxOf(filamentColorCount, listCount(value))
+                    "filament_map" -> filamentMapCount = maxOf(filamentMapCount, listCount(value))
+                }
+            }
+        }
+    }
+
+    val hasMulticolorEvidence =
+        toolIds.size > 1 ||
+            m620Count > 0 ||
+            m621Count > 0
+    return GeneratedGcodeMulticolorAudit(
+        expectedActiveSlots = expectedActiveSlots,
+        toolIds = toolIds,
+        filamentColorCount = filamentColorCount,
+        filamentMapCount = filamentMapCount,
+        m620Count = m620Count,
+        m621Count = m621Count,
+        hasMulticolorEvidence = hasMulticolorEvidence
+    )
 }
 
 private fun PlateObject.nativeSourceFilePath(): String =
@@ -651,6 +749,8 @@ private fun nativeSliceConfigDiagnosticSummary(configJson: String): String {
         append(" seam_gap=").append(value("seam_gap"))
         append(" active_slots=").append(value("mobile_slicer_active_filament_slot_count"))
         append(" physical_nozzles=").append(value("mobile_slicer_physical_nozzle_count"))
+        append(" prime_tower=").append(value("enable_prime_tower"))
+        append(" purge_in_prime_tower=").append(value("purge_in_prime_tower"))
     }
 }
 
@@ -708,37 +808,57 @@ internal fun MainActivity.sliceCurrentModel(
             printerBed = printerBed,
             stagedModelFile = stagedModelFile
         )
-        val request = nativePlateLoadRequest(slicePlateObjects, printerBed)
-            ?: return SliceResult("Slice failed\nOne or more plate objects are still preparing.", sliced = false)
+        val nativeProjectRequest = nativeProjectSliceRequest(slicePlateObjects)
+        val request = if (nativeProjectRequest == null) {
+            nativePlateLoadRequest(slicePlateObjects, printerBed)
+                ?: return SliceResult("Slice failed\nOne or more plate objects are still preparing.", sliced = false)
+        } else {
+            null
+        }
+        val loadSignature = nativeProjectRequest?.signature ?: request?.signature.orEmpty()
+        val loadObjectIds = nativeProjectRequest?.mobileObjectIds ?: request?.mobileObjectIds ?: LongArray(0)
         Log.i(
             MainActivity.TAG,
-            "slice_load_plate start objects=${slicePlateObjects.size} paths=${request.paths.size} signature=${request.signature.hashCode()}"
+            if (nativeProjectRequest != null) {
+                "slice_load_project3mf start objects=${slicePlateObjects.size} path=${nativeProjectRequest.path} signature=${loadSignature.hashCode()}"
+            } else {
+                "slice_load_plate start objects=${slicePlateObjects.size} paths=${request?.paths?.size ?: 0} signature=${loadSignature.hashCode()}"
+            }
         )
-        if (nativeLoadedModelPath != request.signature || !nativePaintBindingsCover(handle, request.mobileObjectIds)) {
+        if (nativeLoadedModelPath != loadSignature || !nativePaintBindingsCover(handle, loadObjectIds)) {
             val modelReloadStartedAt = SystemClock.elapsedRealtime()
-            val loadPlateResult = NativeEngineCalls.loadPlateModelsV2(
-                handle = handle,
-                paths = request.paths,
-                sourcePaths = request.sourcePaths,
-                transforms = request.transforms,
-                extruderIds = request.extruderIds,
-                mobileObjectIds = request.mobileObjectIds,
-                paintPayloadJson = request.paintPayloadJson
-            )
+            val loadPlateResult = if (nativeProjectRequest != null) {
+                NativeEngineCalls.loadProject3mf(
+                    handle = handle,
+                    path = nativeProjectRequest.path,
+                    mobileObjectIds = nativeProjectRequest.mobileObjectIds
+                )
+            } else {
+                val plateRequest = request ?: return SliceResult("Slice failed\nOne or more plate objects are still preparing.", sliced = false)
+                NativeEngineCalls.loadPlateModelsV2(
+                    handle = handle,
+                    paths = plateRequest.paths,
+                    sourcePaths = plateRequest.sourcePaths,
+                    transforms = plateRequest.transforms,
+                    extruderIds = plateRequest.extruderIds,
+                    mobileObjectIds = plateRequest.mobileObjectIds,
+                    paintPayloadJson = plateRequest.paintPayloadJson
+                )
+            }
             if (loadPlateResult !is NativeEngineCallResult.Success) {
                 NativeEngineCalls.clearGeneratedGcode(handle)
                 nativeLoadedModelPath = null
-                Log.e(MainActivity.TAG, "slice_load_plate failed ${loadPlateResult.statusMessage}")
+                Log.e(MainActivity.TAG, "slice_load_model failed ${loadPlateResult.statusMessage}")
                 return SliceResult(
                     "Slice failed\nMobileSlicer could not prepare every model on this plate.\n${loadPlateResult.statusMessage}",
                     sliced = false
                 )
             }
             modelReloadMs = SystemClock.elapsedRealtime() - modelReloadStartedAt
-            nativeLoadedModelPath = request.signature
-            Log.i(MainActivity.TAG, "slice_load_plate done modelReloadMs=$modelReloadMs")
+            nativeLoadedModelPath = loadSignature
+            Log.i(MainActivity.TAG, "slice_load_model done modelReloadMs=$modelReloadMs project3mf=${nativeProjectRequest != null}")
         } else {
-            Log.i(MainActivity.TAG, "slice_load_plate cache_hit")
+            Log.i(MainActivity.TAG, "slice_load_model cache_hit project3mf=${nativeProjectRequest != null}")
         }
         val configStartedAt = SystemClock.elapsedRealtime()
         val configResult = NativeEngineCalls.setConfigJson(handle, configJson)
@@ -859,6 +979,15 @@ internal fun MainActivity.sliceCurrentModel(
                     sliced = false
                 )
             } else {
+                val gcodeAudit = auditGeneratedGcodeMulticolor(gcodeFile, configJson)
+                Log.i(MainActivity.TAG, "slice_gcode_audit ${gcodeAudit.logSummary()}")
+                gcodeAudit.failureReason?.let { reason ->
+                    Log.e(MainActivity.TAG, "slice_gcode_audit failed $reason")
+                    return SliceResult(
+                        "Slice failed\n$reason",
+                        sliced = false
+                    )
+                }
                 cleanupGeneratedGcodeCache(
                     retainedPaths = retainedCachePaths(
                         listOf(gcodeFile),

@@ -1003,6 +1003,14 @@ class ProfileModelsTest {
     }
 
     @Test
+    fun newProcessProfilesDefaultPrimeTowerOn() {
+        val process = processFixture()
+
+        assertTrue(process.enablePrimeTower)
+        assertEquals(60f, process.primeTowerWidthMm, 0.0001f)
+    }
+
+    @Test
     fun defaultProcessProfilesAreNotBuiltIn() {
         assertTrue(ProfileStoreRepository.defaultProcessProfiles().isEmpty())
     }

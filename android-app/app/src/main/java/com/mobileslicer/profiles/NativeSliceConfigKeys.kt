@@ -101,5 +101,7 @@ internal object NativeConfigKeys {
     object Mobile {
         const val ActiveFilamentSlotCount = "mobile_slicer_active_filament_slot_count"
         const val SingleMaterialNativeSlice = "mobile_slicer_single_material_native_slice"
+        const val ProcessPrimeTowerEnabled = "mobile_slicer_process_prime_tower_enabled"
+        const val PrinterPurgeInPrimeTowerEnabled = "mobile_slicer_printer_purge_in_prime_tower_enabled"
     }
 }

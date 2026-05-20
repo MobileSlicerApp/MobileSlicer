@@ -1,0 +1,48 @@
+{
+  "plates": [
+    {
+      "plate_name": "Snapmaker U1 multi-nozzle",
+      "need_arrange": false,
+      "objects": [
+        {
+          "path": "artifacts/orca-project-fixtures/snapmaker-u1-multinozzle-20260519-202612/work/u1_red_cube.stl",
+          "count": 1,
+          "filaments": [
+            1
+          ],
+          "pos_x": [
+            120
+          ],
+          "pos_y": [
+            135
+          ],
+          "pos_z": [
+            0
+          ],
+          "assemble_index": [
+            0
+          ]
+        },
+        {
+          "path": "artifacts/orca-project-fixtures/snapmaker-u1-multinozzle-20260519-202612/work/u1_blue_cube.stl",
+          "count": 1,
+          "filaments": [
+            2
+          ],
+          "pos_x": [
+            155
+          ],
+          "pos_y": [
+            135
+          ],
+          "pos_z": [
+            0
+          ],
+          "assemble_index": [
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}

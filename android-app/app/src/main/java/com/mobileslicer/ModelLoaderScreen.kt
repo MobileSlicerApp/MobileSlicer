@@ -335,6 +335,7 @@ internal fun ModelLoaderScreen(
     var sliceInProgress by rememberSaveable { mutableStateOf(false) }
     var sendToPrinterInProgress by rememberSaveable { mutableStateOf(false) }
     var platePlanningInProgress by rememberSaveable { mutableStateOf(false) }
+    var pendingNativePaintCommitCount by remember { mutableIntStateOf(0) }
     var sliceCompletionResult by remember { mutableStateOf<SliceResult?>(null) }
     var workspaceEventBanner by remember { mutableStateOf<String?>(null) }
     var savePlateNamePrompt by remember { mutableStateOf<String?>(null) }
@@ -588,7 +589,8 @@ internal fun ModelLoaderScreen(
                 context = context,
                 printerId = selectedPrinter.id,
                 availableFilaments = sliceReadyProfileStore.filaments,
-                fallbackFilament = selectedFilament
+                fallbackFilament = selectedFilament,
+                physicalNozzleCount = selectedPrinter.materialSlotPhysicalNozzleCount()
             )
             val printerSlots = printerMaterialSlotState.slots
             plateFilamentSlots.clear()
@@ -596,7 +598,8 @@ internal fun ModelLoaderScreen(
             plateFlushVolumes = ensureFlushVolumesForSlots(
                 slots = printerSlots,
                 existing = printerMaterialSlotState.flushVolumes,
-                regenerateFromColors = printerMaterialSlotState.flushVolumes == null
+                regenerateFromColors = printerMaterialSlotState.flushVolumes == null,
+                nozzleCount = selectedPrinter.materialSlotPhysicalNozzleCount()
             )
             plateObjects.replaceAll { objectOnPlate ->
                 objectOnPlate.copy(filamentSlotIndex = objectOnPlate.filamentSlotIndex.coerceIn(1, printerSlots.size.coerceAtLeast(1)))
@@ -623,7 +626,8 @@ internal fun ModelLoaderScreen(
                 plateFlushVolumes = ensureFlushVolumesForSlots(
                     slots = syncedSlots,
                     existing = plateFlushVolumes,
-                    regenerateFromColors = true
+                    regenerateFromColors = true,
+                    nozzleCount = selectedPrinter.materialSlotPhysicalNozzleCount()
                 )
                 if (currentSavedProjectId == null) {
                     persistPrinterMaterialSlotState(context, selectedPrinter.id, syncedSlots, plateFlushVolumes)
@@ -3124,9 +3128,24 @@ internal fun ModelLoaderScreen(
                     }
                 },
                 onSlice = {
+                    val profileFailureMessage = sliceReadyProfileStore.profileRequirementMessage()
                     val sliceStartPlan =
-                        if (!canRequestModelLoaderSlice(modelLoaded, sliceInProgress, sendToPrinterInProgress)) {
+                        if (pendingNativePaintCommitCount > 0) {
+                            ModelLoaderSliceStartPlan.Fail(
+                                SliceResult(
+                                    "Slice paused\nPaint changes are still being applied. Try again in a moment.",
+                                    sliced = false
+                                )
+                            )
+                        } else if (!canRequestModelLoaderSlice(modelLoaded, sliceInProgress, sendToPrinterInProgress)) {
                             ModelLoaderSliceStartPlan.Ignore
+                        } else if (profileFailureMessage != null) {
+                            ModelLoaderSliceStartPlan.Fail(
+                                SliceResult(
+                                    "Slice blocked\n$profileFailureMessage",
+                                    sliced = false
+                                )
+                            )
                         } else {
                             val generatedFootprintFits = normalizeGeneratedFootprintBeforeSlice()
                             val calibrationFirmwareFailure =
@@ -3286,18 +3305,23 @@ internal fun ModelLoaderScreen(
                     )
                     val objectsSnapshot = plateObjects.toList()
                     val savedProjectIdSnapshot = currentSavedProjectId
+                    pendingNativePaintCommitCount++
                     coroutineScope.launch {
-                        val result = withContext(Dispatchers.Default) {
-                            applyNativePaintPayloadCommit(
-                                objects = objectsSnapshot,
-                                currentSavedProjectId = savedProjectIdSnapshot,
-                                objectId = objectId,
-                                mode = mode.toWorkspacePaintMode(),
-                                payloadJson = payloadJson
-                            )
-                        }
-                        if (!applyNativePaintPayloadCommitResult(objectId, result)) {
-                            workspaceStatus = "Paint update failed\nNative payload was not usable"
+                        try {
+                            val result = withContext(Dispatchers.Default) {
+                                applyNativePaintPayloadCommit(
+                                    objects = objectsSnapshot,
+                                    currentSavedProjectId = savedProjectIdSnapshot,
+                                    objectId = objectId,
+                                    mode = mode.toWorkspacePaintMode(),
+                                    payloadJson = payloadJson
+                                )
+                            }
+                            if (!applyNativePaintPayloadCommitResult(objectId, result)) {
+                                workspaceStatus = "Paint update failed\nNative payload was not usable"
+                            }
+                        } finally {
+                            pendingNativePaintCommitCount = (pendingNativePaintCommitCount - 1).coerceAtLeast(0)
                         }
                     }
                 },

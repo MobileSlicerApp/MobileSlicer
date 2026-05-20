@@ -19,12 +19,14 @@ import com.mobileslicer.workspace.PlateFilamentSlot
 import com.mobileslicer.workspace.PlateFlushVolumes
 import com.mobileslicer.workspace.PlateObject
 import com.mobileslicer.workspace.PlateObjectModifierMesh
+import com.mobileslicer.workspace.PlateObjectGeometrySource
 import com.mobileslicer.workspace.PlateObjectProcessOverride
 import com.mobileslicer.workspace.PrimeTowerPlacementOverride
 import com.mobileslicer.workspace.SliceResult
 import com.mobileslicer.workspace.applyToNativeConfig
 import com.mobileslicer.workspace.defaultNativeModelTransform
 import com.mobileslicer.workspace.primeTowerPlacementForWorkspace
+import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -40,6 +42,33 @@ internal typealias ModelLoaderSliceRequestHandler = (
     ViewerModelTransform?,
     String?
 ) -> SliceResult
+
+internal fun strictSliceProfileIssue(
+    configuration: ActiveSlicerConfiguration,
+    printer: PrinterProfile,
+    processProfiles: List<ProcessProfile>,
+    profileFilaments: List<FilamentProfile>,
+    activePlateSlots: List<PlateFilamentSlot>
+): String? {
+    if (configuration.printer.id != printer.id) {
+        return "Active printer profile mismatch. Re-select the printer in Profiles before slicing."
+    }
+    if (processProfiles.none { process -> process.id == configuration.process.id && process.printerProfileId == printer.id }) {
+        return "Selected process profile is missing for ${printer.name}. Re-select or import the correct process in Profiles before slicing."
+    }
+    if (activePlateSlots.isEmpty()) {
+        return "No material slot is selected for ${printer.name}. Re-select or import the filament in Profiles before slicing."
+    }
+    val missingSlot = activePlateSlots.firstOrNull { slot ->
+        profileFilaments.none { filament ->
+            filament.id == slot.filamentProfileId && filament.printerProfileId == printer.id
+        }
+    }
+    if (missingSlot != null) {
+        return "Material slot ${missingSlot.index} is not backed by a filament profile for ${printer.name}. Re-select or import the filament in Profiles before slicing."
+    }
+    return null
+}
 
 internal suspend fun prepareNativeConfigForPlatePlanning(
     context: Context,
@@ -112,6 +141,19 @@ internal suspend fun runModelLoaderSlice(
     gcodeFileName: String,
     onSliceRequested: ModelLoaderSliceRequestHandler
 ): SliceResult {
+    strictSliceProfileIssue(
+        configuration = configuration,
+        printer = printer,
+        processProfiles = processProfiles,
+        profileFilaments = profileFilaments,
+        activePlateSlots = activePlateSlots
+    )?.let { issue ->
+        Log.e("MobileSlicer", "slice_profile_blocked $issue")
+        return SliceResult(
+            message = "Slice blocked\n$issue",
+            sliced = false
+        )
+    }
     val repairFilamentOverridesJson = activePlateSlots
         .firstOrNull()
         ?.filamentProfileId
@@ -213,6 +255,19 @@ internal suspend fun runModelLoaderSlice(
             }
         }
     )
+}
+
+internal fun preservesImportedThreeMfProjectMaterials(plateObjects: List<PlateObject>): Boolean {
+    if (plateObjects.size != 1) return false
+    val objectOnPlate = plateObjects.single()
+    val source = objectOnPlate.geometrySource as? PlateObjectGeometrySource.ThreeMfMeshExtract ?: return false
+    if (source.originalPath.isBlank()) return false
+    if (!File(source.originalPath).isFile) return false
+    if (objectOnPlate.filamentSlotIndex != 1) return false
+    if (objectOnPlate.paint.hasAnyPaintPayload) return false
+    if (objectOnPlate.modifiers.any { it.enabled }) return false
+    if (objectOnPlate.processOverride != null) return false
+    return true
 }
 
 internal fun applyObjectProcessOverridesToNativeConfig(

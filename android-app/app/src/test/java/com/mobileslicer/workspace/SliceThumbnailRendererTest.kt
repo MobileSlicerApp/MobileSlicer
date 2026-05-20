@@ -164,6 +164,35 @@ class SliceThumbnailRendererTest {
     }
 
     @Test
+    fun sampledForThumbnailTriangleBudgetKeepsLargeMeshesRenderable() {
+        val mesh = multiTriangleMesh(triangleCount = 5)
+
+        val sampled = mesh.sampledForThumbnailTriangleBudget(maxTriangles = 2)
+
+        assertEquals(2, sampled.triangleCount)
+        assertEquals(18, sampled.vertices.size)
+        assertEquals(18, sampled.normals.size)
+        assertEquals(mesh.bounds, sampled.bounds)
+        assertEquals(null, sampled.indices)
+        assertEquals(mesh.vertices[0], sampled.vertices[0], 0.0f)
+        assertEquals(mesh.vertices[27], sampled.vertices[9], 0.0f)
+    }
+
+    @Test
+    fun fitThumbnailSourcesToTriangleBudgetPreservesTotalBudgetAcrossSources() {
+        val sources = listOf(
+            ThumbnailSource(multiTriangleMesh(triangleCount = 6), ViewerModelTransform(centerXmm = 0f, centerYmm = 0f), null),
+            ThumbnailSource(multiTriangleMesh(triangleCount = 4), ViewerModelTransform(centerXmm = 0f, centerYmm = 0f), null)
+        )
+
+        val sampled = fitThumbnailSourcesToTriangleBudget(sources, maxTotalTriangles = 5)
+
+        assertEquals(2, sampled.size)
+        assertTrue(sampled.sumOf { it.mesh.triangleCount } <= 5)
+        assertEquals(listOf(3, 2), sampled.map { it.mesh.triangleCount })
+    }
+
+    @Test
     fun renderSliceThumbnailsProducesDistinctPackageRoles() {
         val result = renderSliceThumbnails(
             requestSummary = NativeThumbnailRequestSummary(
@@ -236,6 +265,30 @@ class SliceThumbnailRendererTest {
             ),
             indices = null
         )
+
+    private fun multiTriangleMesh(triangleCount: Int): StlMesh {
+        val vertices = FloatArray(triangleCount * 9) { index -> index.toFloat() }
+        val normals = FloatArray(triangleCount * 9) { index ->
+            when (index % 3) {
+                2 -> 1f
+                else -> 0f
+            }
+        }
+        return StlMesh(
+            vertices = vertices,
+            normals = normals,
+            triangleCount = triangleCount,
+            bounds = MeshBounds(
+                minX = 0f,
+                minY = 0f,
+                minZ = 0f,
+                maxX = triangleCount.toFloat(),
+                maxY = triangleCount.toFloat(),
+                maxZ = triangleCount.toFloat()
+            ),
+            indices = null
+        )
+    }
 
     private class CountingThumbnailBackend : SliceThumbnailRendererBackend {
         override val rendererName: String = "counting"
