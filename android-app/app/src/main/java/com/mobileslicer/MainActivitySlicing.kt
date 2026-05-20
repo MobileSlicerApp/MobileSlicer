@@ -194,9 +194,11 @@ private data class NativeProjectSliceRequest(
 
 internal data class GeneratedGcodeMulticolorAudit(
     val expectedActiveSlots: Int,
+    val expectedPhysicalNozzles: Int,
     val toolIds: Set<Int>,
     val filamentColorCount: Int,
     val filamentMapCount: Int,
+    val nozzleDiameterCount: Int,
     val m620Count: Int,
     val m621Count: Int,
     val hasMulticolorEvidence: Boolean
@@ -205,16 +207,33 @@ internal data class GeneratedGcodeMulticolorAudit(
         get() = expectedActiveSlots > 1
 
     val failureReason: String?
-        get() = if (requiresMulticolorEvidence && !hasMulticolorEvidence) {
-            "Expected $expectedActiveSlots active filament slots, but generated G-code only contains single-material evidence."
-        } else {
-            null
+        get() {
+            if (!requiresMulticolorEvidence) return null
+            val issues = mutableListOf<String>()
+            if (!hasMulticolorEvidence) {
+                issues += "generated G-code only contains single-material evidence"
+            }
+            if (filamentColorCount != expectedActiveSlots) {
+                issues += "filament_colour count is $filamentColorCount, expected $expectedActiveSlots"
+            }
+            if (filamentMapCount != expectedActiveSlots) {
+                issues += "filament_map count is $filamentMapCount, expected $expectedActiveSlots"
+            }
+            if (expectedPhysicalNozzles > 1 && nozzleDiameterCount < expectedPhysicalNozzles) {
+                issues += "nozzle_diameter count is $nozzleDiameterCount, expected at least $expectedPhysicalNozzles"
+            }
+            return issues.takeIf { it.isNotEmpty() }?.joinToString(
+                prefix = "Expected $expectedActiveSlots active filament slots, but ",
+                separator = "; ",
+                postfix = "."
+            )
         }
 
     fun logSummary(): String =
         "expectedActiveSlots=$expectedActiveSlots " +
+            "expectedPhysicalNozzles=$expectedPhysicalNozzles " +
             "toolIds=${toolIds.sorted().joinToString(",", prefix = "[", postfix = "]")} " +
-            "filamentColorCount=$filamentColorCount filamentMapCount=$filamentMapCount " +
+            "filamentColorCount=$filamentColorCount filamentMapCount=$filamentMapCount nozzleDiameterCount=$nozzleDiameterCount " +
             "M620=$m620Count M621=$m621Count hasMulticolorEvidence=$hasMulticolorEvidence"
 }
 
@@ -276,9 +295,13 @@ internal fun auditGeneratedGcodeMulticolor(gcodeFile: File, configJson: String):
     val expectedActiveSlots = runCatching {
         org.json.JSONObject(configJson).optInt(NativeConfigKeys.Mobile.ActiveFilamentSlotCount, 1)
     }.getOrDefault(1).coerceAtLeast(1)
+    val expectedPhysicalNozzles = runCatching {
+        org.json.JSONObject(configJson).optInt("mobile_slicer_physical_nozzle_count", 1)
+    }.getOrDefault(1).coerceAtLeast(1)
     val toolIds = linkedSetOf<Int>()
     var filamentColorCount = 0
     var filamentMapCount = 0
+    var nozzleDiameterCount = 0
     var m620Count = 0
     var m621Count = 0
 
@@ -305,6 +328,7 @@ internal fun auditGeneratedGcodeMulticolor(gcodeFile: File, configJson: String):
                 when (key) {
                     "filament_colour" -> filamentColorCount = maxOf(filamentColorCount, listCount(value))
                     "filament_map" -> filamentMapCount = maxOf(filamentMapCount, listCount(value))
+                    "nozzle_diameter" -> nozzleDiameterCount = maxOf(nozzleDiameterCount, listCount(value))
                 }
             }
         }
@@ -316,9 +340,11 @@ internal fun auditGeneratedGcodeMulticolor(gcodeFile: File, configJson: String):
             m621Count > 0
     return GeneratedGcodeMulticolorAudit(
         expectedActiveSlots = expectedActiveSlots,
+        expectedPhysicalNozzles = expectedPhysicalNozzles,
         toolIds = toolIds,
         filamentColorCount = filamentColorCount,
         filamentMapCount = filamentMapCount,
+        nozzleDiameterCount = nozzleDiameterCount,
         m620Count = m620Count,
         m621Count = m621Count,
         hasMulticolorEvidence = hasMulticolorEvidence

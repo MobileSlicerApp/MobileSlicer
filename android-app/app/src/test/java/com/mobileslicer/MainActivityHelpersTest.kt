@@ -122,10 +122,9 @@ class MainActivityHelpersTest {
 
             assertTrue(audit.requiresMulticolorEvidence)
             assertFalse(audit.hasMulticolorEvidence)
-            assertEquals(
-                "Expected 2 active filament slots, but generated G-code only contains single-material evidence.",
-                audit.failureReason
-            )
+            assertTrue(audit.failureReason.orEmpty().contains("single-material evidence"))
+            assertTrue(audit.failureReason.orEmpty().contains("filament_colour count is 1, expected 2"))
+            assertTrue(audit.failureReason.orEmpty().contains("filament_map count is 1, expected 2"))
         } finally {
             gcodeFile.delete()
         }
@@ -154,6 +153,35 @@ class MainActivityHelpersTest {
             assertTrue(audit.requiresMulticolorEvidence)
             assertTrue(audit.hasMulticolorEvidence)
             assertEquals(null, audit.failureReason)
+        } finally {
+            gcodeFile.delete()
+        }
+    }
+
+    @Test
+    fun generatedGcodeAuditFailsWhenMultiNozzleMetadataIsMissing() {
+        val gcodeFile = File.createTempFile("mobileslicer-missing-nozzle-vector-", ".gcode").apply {
+            writeText(
+                """
+                ; filament_colour = #D3A46F;#F5F5F5
+                ; filament_map = 1,2
+                ; nozzle_diameter = 0.4
+                T0
+                G1 X10 Y10 E1
+                T1
+                G1 X20 Y20 E2
+                """.trimIndent()
+            )
+        }
+        try {
+            val audit = auditGeneratedGcodeMulticolor(
+                gcodeFile,
+                """{"${NativeConfigKeys.Mobile.ActiveFilamentSlotCount}":2,"mobile_slicer_physical_nozzle_count":4}"""
+            )
+
+            assertTrue(audit.requiresMulticolorEvidence)
+            assertTrue(audit.hasMulticolorEvidence)
+            assertTrue(audit.failureReason.orEmpty().contains("nozzle_diameter count is 1, expected at least 4"))
         } finally {
             gcodeFile.delete()
         }

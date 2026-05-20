@@ -554,7 +554,7 @@ internal class AutomationSliceRunner(
         val nativeSliceMs = SystemClock.elapsedRealtime() - nativeSliceStartedAt
         if (sliceResult !is NativeEngineCallResult.Success) {
             writeStatus(
-                "failed: ${sliceResult.statusMessage}$placementSummary fallback=${nativeSliceFailureStatus()} elapsedMs=${SystemClock.elapsedRealtime() - startedAt} config=$configJson"
+                "failed: ${sliceResult.statusMessage}$placementSummary nativeFailure=${nativeSliceFailureStatus()} elapsedMs=${SystemClock.elapsedRealtime() - startedAt} config=$configJson"
             )
             return false
         }
